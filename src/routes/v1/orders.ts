@@ -75,7 +75,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           },
           receipt: {
             customer: {
-              email: userRef ? `${userRef}@outlivion.space` : 'customer@outlivion.space',
+              email: 'noreply@outlivion.space', // Обязательное поле для receipt
             },
             items: [
               {
@@ -85,7 +85,9 @@ export async function ordersRoutes(fastify: FastifyInstance) {
                   value: amount.value,
                   currency: amount.currency,
                 },
-                vat_code: 1, // Без НДС (для ИП/самозанятых)
+                vat_code: 1, // Без НДС (vat_code: 1 = без НДС)
+                payment_subject: 'service', // Услуга (VPN)
+                payment_mode: 'full_prepayment', // Полная предоплата
               },
             ],
           },
