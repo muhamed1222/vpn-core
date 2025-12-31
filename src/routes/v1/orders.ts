@@ -56,24 +56,43 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         });
 
         // Создаем платеж в YooKassa
-        const payment = await yookassaClient.createPayment(
-          {
-            amount: {
-              value: amount.value,
-              currency: amount.currency,
-            },
-            capture: true,
-            confirmation: {
-              type: 'redirect',
-              return_url: yookassaReturnUrl,
-            },
-            description: `Outlivion plan ${planId}, order ${orderId}`,
-            metadata: {
-              orderId,
-              ...(userRef ? { userRef } : {}),
-              planId,
-            },
+        // Для РФ требуется receipt (чек) - добавляем минимальный receipt
+        const paymentParams: any = {
+          amount: {
+            value: amount.value,
+            currency: amount.currency,
           },
+          capture: true,
+          confirmation: {
+            type: 'redirect',
+            return_url: yookassaReturnUrl,
+          },
+          description: `Outlivion plan ${planId}, order ${orderId}`,
+          metadata: {
+            orderId,
+            ...(userRef ? { userRef } : {}),
+            planId,
+          },
+          receipt: {
+            customer: {
+              email: userRef ? `${userRef}@outlivion.space` : 'customer@outlivion.space',
+            },
+            items: [
+              {
+                description: `Outlivion VPN plan: ${planId}`,
+                quantity: '1.00',
+                amount: {
+                  value: amount.value,
+                  currency: amount.currency,
+                },
+                vat_code: 1, // Без НДС (для ИП/самозанятых)
+              },
+            ],
+          },
+        };
+
+        const payment = await yookassaClient.createPayment(
+          paymentParams,
           idempotenceKey
         );
 

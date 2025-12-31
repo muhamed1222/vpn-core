@@ -1,5 +1,23 @@
 import { v4 as uuidv4 } from 'uuid';
 
+export interface YooKassaReceiptItem {
+  description: string;
+  quantity: string;
+  amount: {
+    value: string;
+    currency: string;
+  };
+  vat_code: number;
+}
+
+export interface YooKassaReceipt {
+  customer: {
+    email?: string;
+    phone?: string;
+  };
+  items: YooKassaReceiptItem[];
+}
+
 export interface YooKassaPaymentParams {
   amount: {
     value: string;
@@ -12,6 +30,7 @@ export interface YooKassaPaymentParams {
   };
   description: string;
   metadata: Record<string, string>;
+  receipt?: YooKassaReceipt;
 }
 
 export interface YooKassaPaymentResponse {
