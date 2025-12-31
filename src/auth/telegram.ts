@@ -63,11 +63,15 @@ export function verifyTelegramInitData(
     }
 
     // Формируем data_check_string: все пары кроме hash, отсортированные по key, склеенные через \n
-    // Используем оригинальные (URL-encoded) значения
+    // ВАЖНО: Используем оригинальные (URL-encoded) значения из строки initData
     const sortedKeys = Array.from(originalParamsMap.keys()).sort();
     const dataCheckString = sortedKeys
       .map(key => `${key}=${originalParamsMap.get(key)}`)
       .join('\n');
+
+    // Логируем для отладки (только на этапе разработки/отладки)
+    // console.log('Data Check String:', dataCheckString);
+    // console.log('Hash from Telegram:', hash);
 
     // Вычисляем secret_key = HMAC_SHA256("WebAppData", botToken) (raw bytes)
     const secretKey = crypto

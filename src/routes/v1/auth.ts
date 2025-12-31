@@ -18,79 +18,108 @@ export async function authRoutes(fastify: FastifyInstance) {
     '/telegram',
     {
       schema: {
-        body: {
-          type: 'object',
-          required: ['initData'],
-          properties: {
-            initData: { type: 'string' },
-          },
-        },
+        body: telegramAuthSchema,
       },
     },
     async (request, reply) => {
       fastify.log.info('[auth/telegram] Received auth request');
-      
-      // Валидация через zod
-      const validationResult = telegramAuthSchema.safeParse(request.body);
-      if (!validationResult.success) {
-        fastify.log.warn({ errors: validationResult.error.errors }, '[auth/telegram] Validation failed');
-        return reply.status(400).send({
-          error: 'Validation failed',
-          details: validationResult.error.errors,
-        });
-      }
+      const { initData } = request.body;
 
-      const { initData } = validationResult.data;
-      fastify.log.debug({ initDataLength: initData.length }, '[auth/telegram] Received initData');
-
-      // Проверяем initData
       const verifyResult = verifyTelegramInitData({
         initData,
-        botToken: botToken || 'MISSING_TOKEN',
-        maxAgeSeconds: 86400, // 24 часа
+        botToken,
       });
 
       if (!verifyResult.valid || !verifyResult.user) {
         fastify.log.warn(
-          { error: verifyResult.error, botTokenExists: !!botToken },
+          { 
+            error: verifyResult.error, 
+            botTokenPrefix: botToken ? botToken.substring(0, 10) : 'none' 
+          },
           'Telegram initData verification failed'
         );
         return reply.status(401).send({
           error: 'Unauthorized',
-          message: verifyResult.error || 'Invalid initData',
+          message: verifyResult.error || 'Invalid Telegram data',
         });
       }
 
-      fastify.log.info({ userId: verifyResult.user.id }, '[auth/telegram] Verification successful');
-
       const user = verifyResult.user;
+      fastify.log.info({ userId: user.id }, '[auth/telegram] Verification successful');
 
-      // Создаем JWT токен
+      // Создаем JWT
       const token = createToken({
         tgId: user.id,
         username: user.username,
         firstName: user.first_name,
         secret: jwtSecret,
-        expiresInDays: 7,
       });
 
       // Устанавливаем cookie
       reply.setCookie(cookieName, token, {
         httpOnly: true,
-        secure: true, // Только HTTPS
+        secure: true,
         sameSite: 'lax',
         path: '/',
         domain: cookieDomain,
-        maxAge: 60 * 60 * 24 * 7, // 7 дней в секундах
+        maxAge: 60 * 60 * 24 * 7, // 7 дней
       });
 
-      // Возвращаем ответ
       return reply.send({
         ok: true,
         user: {
           tgId: user.id,
           username: user.username,
           firstName: user.first_name,
+        },
+      });
+    }
+  );
+
+  // POST /v1/auth/token (для входа по ссылке из бота)
+  fastify.post<{ Body: { token: string } }>(
+    '/token',
+    {
+      schema: {
+        body: {
+          type: 'object',
+          required: ['token'],
+          properties: {
+            token: { type: 'string' },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { token } = request.body;
+      const { verifyToken } = await import('../../auth/jwt.js');
+
+      // Проверяем токен
+      const payload = verifyToken({ token, secret: jwtSecret });
+
+      if (!payload || !payload.tgId) {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          message: 'Invalid or expired login token',
+        });
+      }
+
+      // Устанавливаем сессионную cookie (точно так же, как в /telegram)
+      reply.setCookie(cookieName, token, {
+        httpOnly: true,
+        secure: true,
+        sameSite: 'lax',
+        path: '/',
+        domain: cookieDomain,
+        maxAge: 60 * 60 * 24 * 7,
+      });
+
+      return reply.send({
+        ok: true,
+        user: {
+          tgId: payload.tgId,
+          username: payload.username,
+          firstName: payload.firstName,
         },
       });
     }
