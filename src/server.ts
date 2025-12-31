@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import dotenv from 'dotenv';
 import cors from '@fastify/cors';
+import cookie from '@fastify/cookie';
 import { registerRoutes } from './routes/index.js';
 import { SqliteOrderStore } from './store/sqlite-order-store.js';
 import { OrderStore } from './store/order-store.js';
@@ -22,6 +23,12 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
   : [];
 
+// Telegram auth настройки
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const AUTH_JWT_SECRET = process.env.AUTH_JWT_SECRET || '';
+const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'outlivion_session';
+const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || '.outlivion.space';
+
 const fastify = Fastify({
   logger: true,
   trustProxy: true, // Для корректного определения real IP за nginx
@@ -35,6 +42,10 @@ declare module 'fastify' {
     yookassaReturnUrl: string;
     yookassaWebhookIPCheck: boolean;
     publicBaseUrl: string;
+    telegramBotToken: string;
+    authJwtSecret: string;
+    authCookieName: string;
+    authCookieDomain: string;
   }
 }
 
@@ -54,6 +65,10 @@ fastify.decorate('yookassaClient', yookassaClient);
 fastify.decorate('yookassaReturnUrl', YOOKASSA_RETURN_URL);
 fastify.decorate('yookassaWebhookIPCheck', YOOKASSA_WEBHOOK_IP_CHECK);
 fastify.decorate('publicBaseUrl', PUBLIC_BASE_URL);
+fastify.decorate('telegramBotToken', TELEGRAM_BOT_TOKEN);
+fastify.decorate('authJwtSecret', AUTH_JWT_SECRET);
+fastify.decorate('authCookieName', AUTH_COOKIE_NAME);
+fastify.decorate('authCookieDomain', AUTH_COOKIE_DOMAIN);
 
 
 // Обработка ошибок
@@ -88,6 +103,11 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // Запуск сервера
 const start = async () => {
   try {
+    // Регистрируем cookie plugin (нужен для работы с cookies)
+    await fastify.register(cookie, {
+      secret: AUTH_JWT_SECRET, // Для подписи cookies (опционально)
+    });
+
     // Настройка CORS
     if (ALLOWED_ORIGINS.length > 0) {
       await fastify.register(cors, {
@@ -98,6 +118,7 @@ const start = async () => {
             callback(new Error('Not allowed by CORS'), false);
           }
         },
+        credentials: true, // Разрешаем отправку cookies
       });
     }
 

@@ -9,7 +9,7 @@ export interface Order {
 
 export interface CreateOrderRequest {
   planId: string;
-  userRef?: string;
+  // userRef больше не принимается из body, берется из авторизованного пользователя
 }
 
 export interface CreateOrderResponse {

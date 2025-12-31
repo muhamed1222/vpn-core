@@ -5,32 +5,50 @@ import { YooKassaClient } from '../../integrations/yookassa/client.js';
 import { v4 as uuidv4 } from 'uuid';
 import { getPlanPrice } from '../../config/plans.js';
 import * as ordersRepo from '../../storage/ordersRepo.js';
+import { createVerifyAuth } from '../../auth/verifyAuth.js';
 
 const createOrderSchema = z.object({
   planId: z.string().min(1),
-  userRef: z.string().optional(),
+  // userRef больше не принимаем из body, берем из request.user
 });
 
 export async function ordersRoutes(fastify: FastifyInstance) {
   const yookassaClient: YooKassaClient = fastify.yookassaClient;
   const yookassaReturnUrl: string = fastify.yookassaReturnUrl;
+  const jwtSecret: string = fastify.authJwtSecret;
+  const cookieName: string = fastify.authCookieName;
+
+  // Middleware для проверки авторизации
+  const verifyAuth = createVerifyAuth({
+    jwtSecret,
+    cookieName,
+  });
 
   // POST /v1/orders/create
   fastify.post<{ Body: CreateOrderRequest }>(
     '/create',
     {
+      preHandler: verifyAuth,
       schema: {
         body: {
           type: 'object',
           required: ['planId'],
           properties: {
             planId: { type: 'string' },
-            userRef: { type: 'string' },
+            // userRef больше не принимаем из body
           },
         },
       },
     },
     async (request, reply) => {
+      // Проверяем, что пользователь авторизован (middleware уже проверил)
+      if (!request.user) {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          message: 'Authentication required',
+        });
+      }
+
       // Валидация через zod
       const validationResult = createOrderSchema.safeParse(request.body);
       if (!validationResult.success) {
@@ -40,7 +58,9 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { planId, userRef } = validationResult.data;
+      const { planId } = validationResult.data;
+      // Берем userRef из авторизованного пользователя
+      const userRef = `tg_${request.user.tgId}`;
       const orderId = uuidv4();
       const idempotenceKey = uuidv4(); // Уникальный ключ для каждого запроса
 
@@ -142,6 +162,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
   fastify.get<{ Params: { orderId: string } }>(
     '/:orderId',
     {
+      preHandler: verifyAuth,
       schema: {
         params: {
           type: 'object',
@@ -153,12 +174,29 @@ export async function ordersRoutes(fastify: FastifyInstance) {
       },
     },
     async (request, reply) => {
+      // Проверяем, что пользователь авторизован (middleware уже проверил)
+      if (!request.user) {
+        return reply.status(401).send({
+          error: 'Unauthorized',
+          message: 'Authentication required',
+        });
+      }
+
       const { orderId } = request.params;
 
       const orderRow = ordersRepo.getOrder(orderId);
       if (!orderRow) {
         return reply.status(404).send({
           error: 'Order not found',
+        });
+      }
+
+      // Проверяем, что заказ принадлежит текущему пользователю
+      const expectedUserRef = `tg_${request.user.tgId}`;
+      if (orderRow.user_ref !== expectedUserRef) {
+        return reply.status(403).send({
+          error: 'Forbidden',
+          message: 'Access denied: order belongs to another user',
         });
       }
 

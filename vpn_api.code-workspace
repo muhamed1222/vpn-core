@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../vpnwebsite"
+		},
+		{
+			"path": "../vpn_bot"
+		}
+	],
+	"settings": {}
+}
