@@ -191,3 +191,13 @@ export function hasPaymentEvent(params: {
   return row !== undefined;
 }
 
+export function getOrdersByUser(userRef: string): OrderRow[] {
+  const db = getDatabase();
+  return db.prepare(`
+    SELECT * FROM orders 
+    WHERE user_ref = ? 
+    ORDER BY created_at DESC 
+    LIMIT 50
+  `).all(userRef) as OrderRow[];
+}
+

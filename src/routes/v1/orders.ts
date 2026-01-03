@@ -209,5 +209,34 @@ export async function ordersRoutes(fastify: FastifyInstance) {
       return reply.send(response);
     }
   );
+
+  // GET /v1/orders/history
+  fastify.get(
+    '/history',
+    {
+      preHandler: verifyAuth,
+    },
+    async (request, reply) => {
+      if (!request.user) {
+        return reply.status(401).send({ error: 'Unauthorized' });
+      }
+
+      const userRef = `tg_${request.user.tgId}`;
+      const orders = ordersRepo.getOrdersByUser(userRef);
+
+      const history = orders.map(order => ({
+        id: order.order_id,
+        orderId: order.order_id,
+        amount: parseFloat(order.amount_value || '0'),
+        currency: order.amount_currency || 'RUB',
+        date: new Date(order.created_at).getTime(),
+        status: order.status === 'paid' ? 'success' : (order.status === 'canceled' ? 'cancelled' : 'pending'),
+        planName: order.plan_id, // Можно сделать маппинг в читаемые названия
+        planId: order.plan_id,
+      }));
+
+      return reply.send(history);
+    }
+  );
 }
 
