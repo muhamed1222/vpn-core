@@ -3,6 +3,7 @@ import rateLimit from '@fastify/rate-limit';
 import { ordersRoutes } from './orders.js';
 import { paymentsRoutes } from './payments.js';
 import { authRoutes } from './auth.js';
+import { userRoutes } from './user.js';
 
 export async function v1Routes(fastify: FastifyInstance) {
   // Rate limiting для всех роутов v1
@@ -19,5 +20,7 @@ export async function v1Routes(fastify: FastifyInstance) {
 
   // Регистрируем роуты для платежей
   await fastify.register(paymentsRoutes, { prefix: '/payments' });
-}
 
+  // Регистрируем роуты для пользователя (ключи и статус)
+  await fastify.register(userRoutes, { prefix: '/user' });
+}

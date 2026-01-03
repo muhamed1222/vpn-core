@@ -1,34 +1,33 @@
-// Конфигурация планов и их цен
+// Конфигурация планов и их цен (синхронизировано с vpn_bot)
 export const PLAN_PRICES: Record<string, { value: string; currency: string }> = {
-  'test-10': {
+  'plan_7': {
     value: '10.00',
     currency: 'RUB',
   },
-  'month': {
-    value: '299.00',
+  'plan_30': {
+    value: '99.00',
     currency: 'RUB',
   },
-  'plan-basic': {
-    value: '299.00',
+  'plan_90': {
+    value: '260.00',
     currency: 'RUB',
   },
-  'plan-standard': {
-    value: '599.00',
+  'plan_180': {
+    value: '499.00',
     currency: 'RUB',
   },
-  'plan-premium': {
-    value: '999.00',
+  'plan_365': {
+    value: '899.00',
     currency: 'RUB',
   },
 };
 
-// Дефолтная цена, если план не найден
+// Дефолтная цена (на случай ошибки)
 export const DEFAULT_PLAN_PRICE = {
-  value: '299.00',
+  value: '99.00',
   currency: 'RUB',
 };
 
 export function getPlanPrice(planId: string): { value: string; currency: string } {
   return PLAN_PRICES[planId] || DEFAULT_PLAN_PRICE;
 }
-

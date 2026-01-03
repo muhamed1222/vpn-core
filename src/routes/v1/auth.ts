@@ -1,11 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { z } from 'zod';
 import { verifyTelegramInitData } from '../../auth/telegram.js';
 import { createToken } from '../../auth/jwt.js';
-
-const telegramAuthSchema = z.object({
-  initData: z.string().min(1),
-});
 
 export async function authRoutes(fastify: FastifyInstance) {
   const botToken: string = fastify.telegramBotToken;
@@ -18,7 +13,13 @@ export async function authRoutes(fastify: FastifyInstance) {
     '/telegram',
     {
       schema: {
-        body: telegramAuthSchema,
+        body: {
+          type: 'object',
+          required: ['initData'],
+          properties: {
+            initData: { type: 'string', minLength: 1 },
+          },
+        },
       },
     },
     async (request, reply) => {

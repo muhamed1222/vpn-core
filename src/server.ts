@@ -7,6 +7,7 @@ import { SqliteOrderStore } from './store/sqlite-order-store.js';
 import { OrderStore } from './store/order-store.js';
 import { initDatabase, closeDatabase } from './storage/db.js';
 import { YooKassaClient } from './integrations/yookassa/client.js';
+import { MarzbanService } from './integrations/marzban/service.js';
 
 // Загружаем переменные окружения
 dotenv.config();
@@ -19,7 +20,8 @@ const YOOKASSA_SECRET_KEY = process.env.YOOKASSA_SECRET_KEY || '';
 const YOOKASSA_RETURN_URL = process.env.YOOKASSA_RETURN_URL || 'https://my.outlivion.space/pay/return';
 const YOOKASSA_WEBHOOK_IP_CHECK = process.env.YOOKASSA_WEBHOOK_IP_CHECK === 'true';
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'https://api.outlivion.space';
-// Разрешенные origin для CORS (можно переопределить через env, но по умолчанию только нужные домены)
+
+// Разрешенные origin для CORS
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
   ? process.env.ALLOWED_ORIGINS.split(',').map((origin) => origin.trim())
   : ['https://my.outlivion.space', 'https://outlivion.space'];
@@ -30,16 +32,22 @@ const AUTH_JWT_SECRET = process.env.AUTH_JWT_SECRET || '';
 const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'outlivion_session';
 const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || '.outlivion.space';
 
+// Marzban settings
+const MARZBAN_API_URL = process.env.MARZBAN_API_URL || 'http://127.0.0.1:8000';
+const MARZBAN_ADMIN_USERNAME = process.env.MARZBAN_ADMIN_USERNAME || '';
+const MARZBAN_ADMIN_PASSWORD = process.env.MARZBAN_ADMIN_PASSWORD || '';
+
 const fastify = Fastify({
   logger: true,
-  trustProxy: true, // Для корректного определения real IP за nginx
+  trustProxy: true,
 });
 
-// Расширяем типы Fastify для orderStore и yookassaClient
+// Расширяем типы Fastify
 declare module 'fastify' {
   interface FastifyInstance {
     orderStore: OrderStore;
     yookassaClient: YooKassaClient;
+    marzbanService: MarzbanService;
     yookassaReturnUrl: string;
     yookassaWebhookIPCheck: boolean;
     publicBaseUrl: string;
@@ -71,6 +79,13 @@ fastify.decorate('authJwtSecret', AUTH_JWT_SECRET);
 fastify.decorate('authCookieName', AUTH_COOKIE_NAME);
 fastify.decorate('authCookieDomain', AUTH_COOKIE_DOMAIN);
 
+// Инициализируем Marzban сервис
+const marzbanService = new MarzbanService(
+  MARZBAN_API_URL,
+  MARZBAN_ADMIN_USERNAME,
+  MARZBAN_ADMIN_PASSWORD
+);
+fastify.decorate('marzbanService', marzbanService);
 
 // Обработка ошибок
 fastify.setErrorHandler((error, request, reply) => {
@@ -84,11 +99,9 @@ fastify.setErrorHandler((error, request, reply) => {
 // Graceful shutdown
 const gracefulShutdown = async (signal: string) => {
   fastify.log.info(`Received ${signal}, closing server...`);
-  
   try {
     await fastify.close();
     closeDatabase();
-    fastify.log.info('Server closed successfully');
     process.exit(0);
   } catch (error) {
     fastify.log.error({ err: error }, 'Error during shutdown');
@@ -97,38 +110,35 @@ const gracefulShutdown = async (signal: string) => {
   }
 };
 
-// Обработка сигналов завершения
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 
-// Запуск сервера
 const start = async () => {
   try {
-    // Регистрируем cookie plugin (нужен для работы с cookies)
     await fastify.register(cookie, {
-      secret: AUTH_JWT_SECRET, // Для подписи cookies (опционально)
+      secret: AUTH_JWT_SECRET,
     });
 
-    // Настройка CORS
     await fastify.register(cors, {
       origin: (origin, callback) => {
-        // Для запросов с credentials: true origin должен быть явно указан и в списке разрешенных
-        // Разрешаем только явно указанные origin из ALLOWED_ORIGINS
-        if (origin && ALLOWED_ORIGINS.includes(origin)) {
+        // Разрешаем запросы без origin (например, от бота или curl)
+        if (!origin) {
+          callback(null, true);
+          return;
+        }
+
+        if (ALLOWED_ORIGINS.includes(origin)) {
           callback(null, true);
         } else {
-          // Для запросов без origin (например, не из браузера) отклоняем
           callback(new Error('Not allowed by CORS'), false);
         }
       },
-      credentials: true, // Разрешаем отправку cookies (withCredentials: true на фронтенде)
-      allowedHeaders: ['Content-Type', 'Authorization'], // Разрешенные заголовки
+      credentials: true,
+      allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
     });
 
-    // Регистрируем роуты (rate-limit настроен внутри v1Routes)
     await registerRoutes(fastify);
 
-    // Выводим список зарегистрированных маршрутов для отладки
     console.log('Registered routes:');
     console.log(fastify.printRoutes());
 
@@ -141,4 +151,3 @@ const start = async () => {
 };
 
 start();
-
