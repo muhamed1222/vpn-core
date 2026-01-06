@@ -12,9 +12,8 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
   fastify.get('/', async (request, reply) => {
     // Преобразуем PLAN_PRICES в формат для фронтенда
     const tariffs = Object.entries(PLAN_PRICES).map(([id, price]) => {
-      // Извлекаем дни из planId (plan_7 = 7 дней, plan_30 = 30 дней и т.д.)
+      // Извлекаем дни из planId
       const days = parseInt(id.replace('plan_', ''), 10);
-      const priceStars = Math.round(parseFloat(price.value) * 10); // Конвертируем в stars (1 RUB = 10 stars)
       
       // Формируем название тарифа
       let name = '';
@@ -29,7 +28,8 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
         id,
         name,
         days,
-        price_stars: priceStars,
+        price_rub: parseFloat(price.value),
+        price_stars: price.stars,
       };
     });
     
