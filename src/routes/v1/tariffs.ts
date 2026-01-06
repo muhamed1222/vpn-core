@@ -9,7 +9,7 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
    * GET /v1/tariffs
    * Возвращает список доступных тарифов
    */
-  fastify.get('/tariffs', async (request, reply) => {
+  fastify.get('/', async (request, reply) => {
     // Преобразуем PLAN_PRICES в формат для фронтенда
     const tariffs = Object.entries(PLAN_PRICES).map(([id, price]) => {
       // Извлекаем дни из planId (plan_7 = 7 дней, plan_30 = 30 дней и т.д.)
