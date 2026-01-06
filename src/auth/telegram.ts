@@ -37,6 +37,18 @@ export function verifyTelegramInitData(
 ): VerifyTelegramInitDataResult {
   const { initData, botToken, maxAgeSeconds = 86400 } = params;
 
+  // РАЗРЕШАЕМ ЛОКАЛЬНУЮ РАЗРАБОТКУ
+  if (initData.includes('query_id=STUB') && process.env.NODE_ENV === 'development') {
+    return {
+      valid: true,
+      user: {
+        id: 12345678,
+        first_name: 'Developer',
+        username: 'dev'
+      }
+    };
+  }
+
   try {
     // Парсим initData как querystring
     // Сохраняем оригинальные значения для data_check_string
