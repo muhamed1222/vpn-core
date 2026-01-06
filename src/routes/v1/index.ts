@@ -4,6 +4,7 @@ import { ordersRoutes } from './orders.js';
 import { paymentsRoutes } from './payments.js';
 import { authRoutes } from './auth.js';
 import { userRoutes } from './user.js';
+import { tariffsRoutes } from './tariffs.js';
 
 export async function v1Routes(fastify: FastifyInstance) {
   // Rate limiting для всех роутов v1
@@ -23,4 +24,7 @@ export async function v1Routes(fastify: FastifyInstance) {
 
   // Регистрируем роуты для пользователя (ключи и статус)
   await fastify.register(userRoutes, { prefix: '/user' });
+
+  // Регистрируем роуты для тарифов
+  await fastify.register(tariffsRoutes, { prefix: '/tariffs' });
 }

@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import axios from 'axios';
 import * as ordersRepo from '../../storage/ordersRepo.js';
+import { createVerifyAuth } from '../../auth/verifyAuth.js';
 
 const yookassaWebhookSchema = z.object({
   type: z.literal('notification'),
@@ -17,6 +18,14 @@ const yookassaWebhookSchema = z.object({
 export async function paymentsRoutes(fastify: FastifyInstance) {
   const marzbanService = fastify.marzbanService;
   const botToken = fastify.telegramBotToken;
+  const jwtSecret: string = fastify.authJwtSecret;
+  const cookieName: string = fastify.authCookieName;
+
+  const verifyAuth = createVerifyAuth({
+    jwtSecret,
+    cookieName,
+    botToken: botToken, // Добавляем botToken для поддержки initData
+  });
 
   fastify.post<{ Body: unknown }>(
     '/webhook',
@@ -96,4 +105,46 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
       return reply.status(200).send({ ok: true });
     }
   );
+
+  /**
+   * GET /v1/payments/history
+   * История платежей пользователя
+   */
+  fastify.get('/history', { preHandler: verifyAuth }, async (request, reply) => {
+    if (!request.user) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const userRef = `tg_${request.user.tgId}`;
+    const orders = ordersRepo.getOrdersByUser(userRef);
+
+    // Преобразуем заказы в формат для фронтенда
+    const payments = orders
+      .filter(order => order.status === 'paid' || order.status === 'pending')
+      .map(order => {
+        // Определяем название плана
+        let planName = order.plan_id;
+        if (order.plan_id === 'plan_7') planName = '7 дней';
+        else if (order.plan_id === 'plan_30') planName = '1 месяц';
+        else if (order.plan_id === 'plan_90') planName = '3 месяца';
+        else if (order.plan_id === 'plan_180') planName = '6 месяцев';
+        else if (order.plan_id === 'plan_365') planName = '1 год';
+
+        return {
+          id: order.yookassa_payment_id || order.order_id,
+          orderId: order.order_id,
+          amount: order.amount_value ? parseFloat(order.amount_value) : 0,
+          currency: order.amount_currency || 'RUB',
+          date: new Date(order.updated_at || order.created_at).getTime(),
+          status: order.status === 'paid' ? 'success' as const : 
+                  order.status === 'pending' ? 'pending' as const : 
+                  'fail' as const,
+          planId: order.plan_id,
+          planName,
+        };
+      })
+      .sort((a, b) => b.date - a.date); // Сортируем по дате (новые первые)
+
+    return reply.send(payments);
+  });
 }

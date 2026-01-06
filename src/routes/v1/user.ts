@@ -9,6 +9,7 @@ export async function userRoutes(fastify: FastifyInstance) {
   const verifyAuth = createVerifyAuth({
     jwtSecret,
     cookieName,
+    botToken: fastify.telegramBotToken, // Добавляем botToken для поддержки initData
   });
 
   /**
@@ -46,10 +47,15 @@ export async function userRoutes(fastify: FastifyInstance) {
   fastify.get('/status', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
     const status = await marzbanService.getUserStatus(request.user.tgId);
+    
+    const now = Math.floor(Date.now() / 1000);
+    const isActive = status && status.status === 'active' && 
+                     status.expire && status.expire > now;
+    
     return reply.send({
-      ok: true,
-      status: status ? status.status : 'not_found',
-      expiresAt: status ? status.expire : null,
+      ok: isActive,
+      status: isActive ? 'active' : 'disabled',
+      expiresAt: status?.expire ? status.expire * 1000 : null, // Конвертируем в миллисекунды
       usedTraffic: (status && typeof status.used_traffic === 'number') ? status.used_traffic : 0,
       dataLimit: (status && typeof status.data_limit === 'number') ? status.data_limit : 0,
     });
@@ -87,5 +93,51 @@ export async function userRoutes(fastify: FastifyInstance) {
     const { tgId, days } = request.body;
     const success = await marzbanService.renewUser(tgId, days);
     return reply.send({ ok: success });
+  });
+
+  /**
+   * GET /v1/user/billing
+   * Статистика использования трафика
+   */
+  fastify.get('/billing', { preHandler: verifyAuth }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    
+    const status = await marzbanService.getUserStatus(request.user.tgId);
+    
+    if (!status) {
+      return reply.send({
+        usedBytes: 0,
+        limitBytes: null,
+        averagePerDayBytes: 0,
+        planId: null,
+        planName: null,
+        period: { start: null, end: null },
+      });
+    }
+    
+    const usedBytes = status.used_traffic || 0;
+    const dataLimit = status.data_limit || null;
+    const expire = status.expire || null;
+    const now = Math.floor(Date.now() / 1000);
+    
+    let averagePerDayBytes = 0;
+    if (expire && expire > now) {
+      const daysActive = Math.ceil((expire - now) / 86400);
+      if (daysActive > 0) {
+        averagePerDayBytes = Math.floor(usedBytes / daysActive);
+      }
+    }
+    
+    return reply.send({
+      usedBytes,
+      limitBytes: dataLimit,
+      averagePerDayBytes,
+      planId: null,
+      planName: null,
+      period: {
+        start: null,
+        end: expire ? expire * 1000 : null, // Конвертируем в миллисекунды
+      },
+    });
   });
 }

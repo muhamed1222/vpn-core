@@ -22,6 +22,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
   const verifyAuth = createVerifyAuth({
     jwtSecret,
     cookieName,
+    botToken: fastify.telegramBotToken, // Добавляем botToken для поддержки initData
   });
 
   // POST /v1/orders/create

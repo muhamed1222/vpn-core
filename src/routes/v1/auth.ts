@@ -128,10 +128,15 @@ export async function authRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /v1/auth/me
-   * Проверка текущей сессии по cookie
+   * Проверка текущей сессии и возврат данных пользователя с подпиской
    */
   const { createVerifyAuth } = await import('../../auth/verifyAuth.js');
-  const verifyAuth = createVerifyAuth({ jwtSecret, cookieName });
+  const verifyAuth = createVerifyAuth({ 
+    jwtSecret, 
+    cookieName,
+    botToken: botToken, // Добавляем botToken для поддержки initData
+  });
+  const marzbanService = fastify.marzbanService;
 
   fastify.get(
     '/me',
@@ -142,9 +147,24 @@ export async function authRoutes(fastify: FastifyInstance) {
       if (!request.user) {
         return reply.status(401).send({ error: 'Unauthorized' });
       }
+      
+      // Получаем данные пользователя из Marzban
+      const status = await marzbanService.getUserStatus(request.user.tgId);
+      const config = await marzbanService.getUserConfig(request.user.tgId);
+      
+      const now = Math.floor(Date.now() / 1000);
+      const isActive = status && status.status === 'active' && 
+                       status.expire && status.expire > now;
+      
+      // Возвращаем данные в формате, который ожидает vpnwebsite
       return reply.send({
-        ok: true,
-        user: request.user,
+        id: request.user.tgId,
+        firstName: request.user.firstName || '',
+        subscription: {
+          is_active: isActive,
+          expires_at: status?.expire ? status.expire * 1000 : null, // Конвертируем в миллисекунды
+          vless_key: config || undefined,
+        },
       });
     }
   );
