@@ -50,19 +50,39 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
     // Вариант 2: initData в Authorization header (для vpnwebsite)
     const initData = request.headers.authorization;
     if (initData && botToken) {
-      const { verifyTelegramInitData } = await import('./telegram.js');
-      const verifyResult = verifyTelegramInitData({
-        initData,
-        botToken,
-      });
-      
-      if (verifyResult.valid && verifyResult.user) {
-        request.user = {
-          tgId: verifyResult.user.id,
-          username: verifyResult.user.username,
-          firstName: verifyResult.user.first_name,
-        };
-        return;
+      try {
+        const { verifyTelegramInitData } = await import('./telegram.js');
+        const verifyResult = verifyTelegramInitData({
+          initData,
+          botToken,
+        });
+        
+        if (verifyResult.valid && verifyResult.user) {
+          request.user = {
+            tgId: verifyResult.user.id,
+            username: verifyResult.user.username,
+            firstName: verifyResult.user.first_name,
+          };
+          return;
+        } else {
+          // Логируем ошибку валидации для отладки
+          console.warn('[verifyAuth] initData validation failed:', {
+            error: verifyResult.error,
+            hasInitData: !!initData,
+            hasBotToken: !!botToken,
+            initDataLength: initData?.length,
+          });
+        }
+      } catch (error) {
+        console.error('[verifyAuth] Error verifying initData:', error);
+      }
+    } else {
+      // Логируем, если нет initData или botToken
+      if (!initData) {
+        console.warn('[verifyAuth] No initData in Authorization header');
+      }
+      if (!botToken) {
+        console.warn('[verifyAuth] No botToken provided to verifyAuth');
       }
     }
 
