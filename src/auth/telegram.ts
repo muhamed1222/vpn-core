@@ -53,9 +53,10 @@ export function verifyTelegramInitData(
       if (key === 'hash') {
         hash = decodedValue;
       } else {
-        // ВАЖНО: Для формирования data_check_string используем ДЕКОДИРОВАННЫЕ значения
-        originalParamsMap.set(key, decodedValue);
-        decodedParamsMap.set(key, decodedValue);
+        // ВАЖНО: Для формирования data_check_string используем ОРИГИНАЛЬНЫЕ (URL-encoded) значения
+        // Но сохраняем и декодированные для извлечения данных
+        originalParamsMap.set(key, rawValue); // Оригинальное значение для data_check_string
+        decodedParamsMap.set(key, decodedValue); // Декодированное для извлечения данных
       }
     }
 
