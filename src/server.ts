@@ -36,6 +36,8 @@ const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || '.outlivion.space';
 const MARZBAN_API_URL = process.env.MARZBAN_API_URL || 'http://127.0.0.1:8000';
 const MARZBAN_ADMIN_USERNAME = process.env.MARZBAN_ADMIN_USERNAME || '';
 const MARZBAN_ADMIN_PASSWORD = process.env.MARZBAN_ADMIN_PASSWORD || '';
+const MARZBAN_PUBLIC_URL = process.env.MARZBAN_PUBLIC_URL || 'https://vpn.outlivion.space';
+const SUBSCRIPTION_PROXY_PATH = process.env.SUBSCRIPTION_PROXY_PATH || '';
 
 const fastify = Fastify({
   logger: true,
@@ -83,7 +85,9 @@ fastify.decorate('authCookieDomain', AUTH_COOKIE_DOMAIN);
 const marzbanService = new MarzbanService(
   MARZBAN_API_URL,
   MARZBAN_ADMIN_USERNAME,
-  MARZBAN_ADMIN_PASSWORD
+  MARZBAN_ADMIN_PASSWORD,
+  MARZBAN_PUBLIC_URL,
+  SUBSCRIPTION_PROXY_PATH
 );
 fastify.decorate('marzbanService', marzbanService);
 

@@ -1,39 +1,49 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { verifyToken } from './jwt.js';
 
-export interface AuthenticatedUser {
+export interface AuthenticationResult {
   tgId: number;
   username?: string;
   firstName?: string;
+  isAdmin?: boolean;
 }
 
 // Расширяем типы Fastify для request.user
 declare module 'fastify' {
   interface FastifyRequest {
-    user?: AuthenticatedUser;
+    user?: AuthenticationResult;
   }
 }
 
 export interface VerifyAuthOptions {
   jwtSecret: string;
   cookieName: string;
-  botToken?: string; // Добавляем botToken для поддержки initData в Authorization header
+  botToken?: string;
+  adminApiKey?: string;
 }
 
 /**
  * Middleware для проверки авторизации
- * Поддерживает два способа:
- * 1. Cookie-based auth (JWT в cookie) - для vpn_bot
- * 2. initData в Authorization header - для vpnwebsite
+ * Поддерживает три способа:
+ * 1. Admin API Key (x-admin-api-key) - для сервисов (vpn_bot)
+ * 2. Cookie-based auth (JWT в cookie) - для браузера
+ * 3. initData в Authorization header - для Mini App
  */
 export function createVerifyAuth(options: VerifyAuthOptions) {
-  const { jwtSecret, cookieName, botToken } = options;
+  const { jwtSecret, cookieName, botToken, adminApiKey } = options;
 
   return async function verifyAuth(
     request: FastifyRequest,
     reply: FastifyReply
   ): Promise<void> {
-    // Вариант 1: Cookie-based auth (для vpn_bot)
+    // Вариант 1: Admin API Key (для vpn_bot)
+    const apiKey = request.headers['x-admin-api-key'];
+    if (adminApiKey && apiKey === adminApiKey) {
+      request.user = { isAdmin: true, tgId: 0 }; // tgId 0 для админа (заглушка)
+      return;
+    }
+
+    // Вариант 2: Cookie-based auth (JWT в cookie)
     const token = request.cookies[cookieName];
     if (token) {
       const payload = verifyToken({ token, secret: jwtSecret });
@@ -42,12 +52,13 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
           tgId: payload.tgId,
           username: payload.username,
           firstName: payload.firstName,
+          isAdmin: false
         };
         return;
       }
     }
 
-    // Вариант 2: initData в Authorization header (для vpnwebsite)
+    // Вариант 3: initData в Authorization header (для vpnwebsite)
     const initData = request.headers.authorization;
     if (initData && botToken) {
       try {
@@ -56,33 +67,18 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
           initData,
           botToken,
         });
-        
+
         if (verifyResult.valid && verifyResult.user) {
           request.user = {
             tgId: verifyResult.user.id,
             username: verifyResult.user.username,
             firstName: verifyResult.user.first_name,
+            isAdmin: false
           };
           return;
-        } else {
-          // Логируем ошибку валидации для отладки
-          console.warn('[verifyAuth] initData validation failed:', {
-            error: verifyResult.error,
-            hasInitData: !!initData,
-            hasBotToken: !!botToken,
-            initDataLength: initData?.length,
-          });
         }
       } catch (error) {
         console.error('[verifyAuth] Error verifying initData:', error);
-      }
-    } else {
-      // Логируем, если нет initData или botToken
-      if (!initData) {
-        console.warn('[verifyAuth] No initData in Authorization header');
-      }
-      if (!botToken) {
-        console.warn('[verifyAuth] No botToken provided to verifyAuth');
       }
     }
 
@@ -93,5 +89,4 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
     });
   };
 }
-
 

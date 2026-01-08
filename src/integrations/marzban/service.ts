@@ -3,9 +3,19 @@ import * as keysRepo from '../../storage/keysRepo.js';
 
 export class MarzbanService {
   public client: MarzbanClient;
+  private publicUrl: string;
+  private subscriptionPath: string;
 
-  constructor(apiUrl: string, username: string, password: string) {
+  constructor(
+    apiUrl: string,
+    username: string,
+    password: string,
+    publicUrl: string = 'https://vpn.outlivion.space',
+    subscriptionPath: string = ''
+  ) {
     this.client = new MarzbanClient(apiUrl, username, password);
+    this.publicUrl = publicUrl;
+    this.subscriptionPath = subscriptionPath;
   }
 
   private async findUser(tgId: number): Promise<MarzbanUser | null> {
@@ -25,11 +35,12 @@ export class MarzbanService {
   /**
    * Возвращает ссылку. 
    * Если в объекте пользователя есть subscription_url, используем его.
+   * subscription_url имеет формат /sub/..., поэтому просто добавляем proxy path
    */
   private formatSubscriptionUrl(user: MarzbanUser): string {
     if (user.subscription_url) {
-      // Это стабильная ссылка /sub/...
-      return `https://vpn.outlivion.space/bot-api${user.subscription_url}`;
+      // subscription_url уже содержит /sub/..., добавляем только proxy path
+      return `${this.publicUrl}${this.subscriptionPath}${user.subscription_url}`;
     }
     // Если нет, берем первую из списка links
     return user.links?.[0] || '';

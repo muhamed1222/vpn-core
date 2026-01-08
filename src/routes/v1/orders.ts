@@ -36,7 +36,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           required: ['planId'],
           properties: {
             planId: { type: 'string' },
-            // userRef больше не принимаем из body
+            tgId: { type: 'number' },
           },
         },
       },
@@ -59,9 +59,22 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { planId } = validationResult.data;
-      // Берем userRef из авторизованного пользователя
-      const userRef = `tg_${request.user.tgId}`;
+      const { planId, tgId } = request.body;
+
+      let userRef: string;
+
+      if (request.user.isAdmin) {
+        if (!tgId) {
+          return reply.status(400).send({ error: 'tgId required for admin requests' });
+        }
+        userRef = `tg_${tgId}`;
+      } else {
+        if (!request.user.tgId) {
+          return reply.status(401).send({ error: 'User ID missing in token' });
+        }
+        userRef = `tg_${request.user.tgId}`;
+      }
+
       const orderId = uuidv4();
       const idempotenceKey = uuidv4(); // Уникальный ключ для каждого запроса
 

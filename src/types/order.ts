@@ -9,6 +9,7 @@ export interface Order {
 
 export interface CreateOrderRequest {
   planId: string;
+  tgId?: number; // Для создания заказа от имени админа (бота)
   // userRef больше не принимается из body, берется из авторизованного пользователя
 }
 
