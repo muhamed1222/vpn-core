@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { verifyTelegramInitData } from '../../auth/telegram.js';
 import { createToken } from '../../auth/jwt.js';
+import { getUserPhotoUrl } from '../../auth/telegramPhoto.js';
 
 export async function authRoutes(fastify: FastifyInstance) {
   const botToken: string = fastify.telegramBotToken;
@@ -48,6 +49,17 @@ export async function authRoutes(fastify: FastifyInstance) {
       const user = verifyResult.user;
       fastify.log.info({ userId: user.id }, '[auth/telegram] Verification successful');
 
+      // Получаем фото профиля: сначала из initData, если нет - через Bot API
+      let photoUrl = user.photo_url || null;
+      if (!photoUrl && botToken) {
+        try {
+          photoUrl = await getUserPhotoUrl(user.id, botToken);
+          fastify.log.info({ userId: user.id, hasPhoto: !!photoUrl }, '[auth/telegram] Photo URL fetched');
+        } catch (error) {
+          fastify.log.warn({ userId: user.id, error }, '[auth/telegram] Failed to fetch photo URL');
+        }
+      }
+
       // Создаем JWT
       const token = createToken({
         tgId: user.id,
@@ -72,6 +84,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           tgId: user.id,
           username: user.username,
           firstName: user.first_name,
+          photoUrl: photoUrl, // URL фотографии из initData или Bot API
         },
       });
     }
@@ -105,6 +118,17 @@ export async function authRoutes(fastify: FastifyInstance) {
         });
       }
 
+      // Получаем фото профиля через Bot API
+      let photoUrl: string | null = null;
+      if (botToken) {
+        try {
+          photoUrl = await getUserPhotoUrl(payload.tgId, botToken);
+          fastify.log.info({ userId: payload.tgId, hasPhoto: !!photoUrl }, '[auth/token] Photo URL fetched');
+        } catch (error) {
+          fastify.log.warn({ userId: payload.tgId, error }, '[auth/token] Failed to fetch photo URL');
+        }
+      }
+
       // Устанавливаем сессионную cookie (точно так же, как в /telegram)
       reply.setCookie(cookieName, token, {
         httpOnly: true,
@@ -121,6 +145,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           tgId: payload.tgId,
           username: payload.username,
           firstName: payload.firstName,
+          photoUrl: photoUrl, // URL фотографии из Bot API
         },
       });
     }
@@ -156,10 +181,23 @@ export async function authRoutes(fastify: FastifyInstance) {
       const isActive = status && status.status === 'active' && 
                        status.expire && status.expire > now;
       
+      // Получаем фото профиля через Bot API
+      let photoUrl: string | null = null;
+      if (botToken) {
+        try {
+          photoUrl = await getUserPhotoUrl(request.user.tgId, botToken);
+          fastify.log.info({ userId: request.user.tgId, hasPhoto: !!photoUrl }, '[auth/me] Photo URL fetched');
+        } catch (error) {
+          fastify.log.warn({ userId: request.user.tgId, error }, '[auth/me] Failed to fetch photo URL');
+        }
+      }
+      
       // Возвращаем данные в формате, который ожидает vpnwebsite
       return reply.send({
         id: request.user.tgId,
         firstName: request.user.firstName || '',
+        username: request.user.username || null, // Добавляем username из JWT токена
+        photoUrl: photoUrl, // URL фотографии профиля
         subscription: {
           is_active: isActive,
           expires_at: status?.expire ? status.expire * 1000 : null, // Конвертируем в миллисекунды

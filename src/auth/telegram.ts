@@ -5,6 +5,7 @@ export interface TelegramUser {
   username?: string;
   first_name?: string;
   last_name?: string;
+  photo_url?: string; // URL фотографии профиля (если доступна)
 }
 
 export interface VerifyTelegramInitDataParams {
