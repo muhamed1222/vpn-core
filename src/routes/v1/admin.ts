@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createVerifyAuth } from '../../auth/verifyAuth.js';
-import { getAllContestParticipants } from '../../storage/contestRepo.js';
+import { getAllContestParticipants, getAllContestTickets } from '../../storage/contestRepo.js';
 import { getActiveContest } from '../../storage/contestRepo.js';
 
 /**
@@ -94,14 +94,15 @@ export async function adminRoutes(fastify: FastifyInstance) {
           });
         }
 
-        const participants = getAllContestParticipants(contest_id, botDbPath);
+        // Получаем развернутые билеты для розыгрыша
+        const tickets = getAllContestTickets(contest_id, botDbPath);
         
         fastify.log.info({ 
           contestId: contest_id, 
-          participantsCount: participants.length 
-        }, '[Admin] Fetched contest participants');
+          ticketsCount: tickets.length 
+        }, '[Admin] Fetched contest tickets');
 
-        return reply.send({ participants });
+        return reply.send({ tickets });
       } catch (error) {
         fastify.log.error({ err: error }, '[Admin] Error fetching participants');
         return reply.status(500).send({ 

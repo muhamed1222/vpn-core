@@ -631,6 +631,80 @@ export interface ContestParticipant {
 }
 
 /**
+ * Запись билета для розыгрыша (развернутая форма)
+ */
+export interface ContestTicket {
+  referrer_id: number; // ID участника (получатель билета)
+  referred_id: number; // ID приглашенного (или сам участник для SELF_PURCHASE)
+  order_id: string; // ID заказа
+}
+
+/**
+ * Получить все билеты конкурса развернуто (для розыгрыша)
+ * Каждая запись из ticket_ledger разворачивается на delta строк
+ */
+export function getAllContestTickets(
+  contestId: string,
+  botDbPath: string
+): ContestTicket[] {
+  const db = getDatabase();
+  
+  try {
+    // Прикрепляем базу бота
+    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    
+    try {
+      // Проверяем наличие таблицы ticket_ledger
+      const ticketLedgerExists = db.prepare(`
+        SELECT name FROM bot_db.sqlite_master 
+        WHERE type='table' AND name='ticket_ledger'
+      `).get() as { name: string } | undefined;
+
+      if (!ticketLedgerExists) {
+        console.warn('[ContestRepo] Table ticket_ledger not found');
+        return [];
+      }
+
+      // Получаем все записи из ticket_ledger с положительным delta (игнорируем REFUND)
+      const ledgerEntries = db.prepare(`
+        SELECT 
+          tl.referrer_id,
+          tl.referred_id,
+          COALESCE(tl.order_id, tl.id) as order_id,
+          tl.delta
+        FROM bot_db.ticket_ledger tl
+        WHERE tl.contest_id = ? AND tl.delta > 0
+        ORDER BY tl.created_at ASC
+      `).all(contestId) as Array<{
+        referrer_id: number;
+        referred_id: number;
+        order_id: string;
+        delta: number;
+      }>;
+
+      // Разворачиваем каждую запись на delta строк
+      const tickets: ContestTicket[] = [];
+      for (const entry of ledgerEntries) {
+        for (let i = 0; i < entry.delta; i++) {
+          tickets.push({
+            referrer_id: entry.referrer_id,
+            referred_id: entry.referred_id,
+            order_id: entry.order_id,
+          });
+        }
+      }
+
+      return tickets;
+    } finally {
+      db.prepare('DETACH DATABASE bot_db').run();
+    }
+  } catch (error) {
+    console.error('[ContestRepo] Error fetching all contest tickets:', error);
+    return [];
+  }
+}
+
+/**
  * Получить всех участников конкурса с данными об оплатах (админский endpoint)
  */
 export function getAllContestParticipants(
