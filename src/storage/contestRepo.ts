@@ -1,4 +1,5 @@
 import { getDatabase } from './db.js';
+import { getTicketsFromPlanIdSQL, checkContestTables } from './contestUtils.js';
 
 export interface Contest {
   id: string;
@@ -8,6 +9,7 @@ export interface Contest {
   attribution_window_days: number;
   rules_version: string;
   is_active: boolean;
+  prizes?: Array<{ icon: string; name: string; position?: string }>; // Опциональный массив призов
 }
 
 export interface ContestSummary {
@@ -17,8 +19,6 @@ export interface ContestSummary {
   invited_total: number;
   qualified_total: number;
   pending_total: number;
-  rank?: number | null; // Позиция в рейтинге (1 = первое место)
-  total_participants?: number | null; // Общее количество участников
 }
 
 export interface ReferralFriend {
@@ -47,7 +47,15 @@ export function getActiveContest(botDbPath: string): Contest | null {
   
   try {
     // Прикрепляем базу бота
-    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    try {
+      db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    } catch (error) {
+      console.error(`[ContestRepo] Failed to attach database: ${botDbPath}`, error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to attach bot database: ${error.message}`);
+      }
+      throw error;
+    }
     
     try {
       // Проверяем, есть ли таблица contests
@@ -165,7 +173,15 @@ export function getReferralSummary(
   
   try {
     // Прикрепляем базу бота
-    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    try {
+      db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    } catch (error) {
+      console.error(`[ContestRepo] Failed to attach database: ${botDbPath}`, error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to attach bot database: ${error.message}`);
+      }
+      throw error;
+    }
     
     try {
       // Получаем конкурс
@@ -200,15 +216,7 @@ export function getReferralSummary(
     const refLink = `https://t.me/outlivion_bot?start=${referralCode}`;
 
       // Проверяем наличие таблиц ref_events и ticket_ledger
-      const refEventsExists = db.prepare(`
-        SELECT name FROM bot_db.sqlite_master 
-        WHERE type='table' AND name='ref_events'
-      `).get() as { name: string } | undefined;
-
-      const ticketLedgerExists = db.prepare(`
-        SELECT name FROM bot_db.sqlite_master 
-        WHERE type='table' AND name='ticket_ledger'
-      `).get() as { name: string } | undefined;
+      const { refEventsExists, ticketLedgerExists } = checkContestTables(db, 'bot_db');
 
       let invitedTotal = 0;
       let qualifiedTotal = 0;
@@ -240,93 +248,71 @@ export function getReferralSummary(
         ticketsTotal = ticketsResult?.tickets_total || 0;
       } else {
         // Fallback на старую логику, если таблицы еще не созданы
+        // ВАЖНО: Проверяем окно атрибуции, период конкурса и квалификацию
+        
+        // Получаем приглашенных друзей за период конкурса
+        // Используем COALESCE для совместимости со старыми данными
         const stats = db.prepare(`
-          SELECT COUNT(*) as invited_total
-          FROM bot_db.user_referrals
-          WHERE referrer_id = ?
-        `).get(tgId) as {
+          SELECT COUNT(DISTINCT ur.referred_id) as invited_total
+          FROM bot_db.user_referrals ur
+          WHERE ur.referrer_id = ?
+            -- Проверка периода конкурса (если есть информация о времени привязки)
+            AND (ur.created_at IS NULL 
+              OR (ur.created_at >= ? AND ur.created_at <= ?))
+        `).get(tgId, contest.starts_at, contest.ends_at) as {
           invited_total: number;
         } | undefined;
 
+        // Получаем квалифицированных друзей с проверкой окна атрибуции
         const qualifiedCount = db.prepare(`
           SELECT COUNT(DISTINCT ur.referred_id) as qualified_total
           FROM bot_db.user_referrals ur
           JOIN bot_db.orders o ON o.user_id = ur.referred_id
           WHERE ur.referrer_id = ?
             AND o.status IN ('PAID', 'COMPLETED')
-        `).get(tgId) as { qualified_total: number } | undefined;
+            -- Проверка периода конкурса
+            AND o.created_at >= ?
+            AND o.created_at <= ?
+            -- Проверка окна атрибуции (7 дней от привязки)
+            AND o.created_at <= datetime(COALESCE(ur.created_at, o.created_at), '+' || ? || ' days')
+            -- Проверка квалификации: первый заказ должен быть ПОСЛЕ привязки
+            AND NOT EXISTS (
+              SELECT 1 FROM bot_db.orders o2
+              WHERE o2.user_id = ur.referred_id
+                AND o2.status IN ('PAID', 'COMPLETED')
+                AND o2.created_at < COALESCE(ur.created_at, o.created_at)
+            )
+        `).get(tgId, contest.starts_at, contest.ends_at, contest.attribution_window_days) as { qualified_total: number } | undefined;
 
-        invitedTotal = stats?.invited_total || 0;
-        qualifiedTotal = qualifiedCount?.qualified_total || 0;
-
+        // Получаем билеты с теми же проверками
         const ticketsResult = db.prepare(`
-          SELECT COALESCE(SUM(
-            CASE 
-              WHEN o.plan_id = 'plan_30' THEN 1
-              WHEN o.plan_id = 'plan_90' THEN 3
-              WHEN o.plan_id = 'plan_180' THEN 6
-              WHEN o.plan_id = 'plan_365' THEN 12
-              WHEN o.plan_id LIKE 'plan_%' THEN CAST(SUBSTR(o.plan_id, 6) AS INTEGER) / 30
-              ELSE 1
-            END
-          ), 0) as tickets_total
+          SELECT COALESCE(SUM(${getTicketsFromPlanIdSQL('o.plan_id')}), 0) as tickets_total
           FROM bot_db.orders o
           JOIN bot_db.user_referrals ur ON ur.referred_id = o.user_id
           WHERE ur.referrer_id = ?
             AND o.status IN ('PAID', 'COMPLETED')
-        `).get(tgId) as { tickets_total: number } | undefined;
+            -- Проверка периода конкурса
+            AND o.created_at >= ?
+            AND o.created_at <= ?
+            -- Проверка окна атрибуции
+            AND o.created_at <= datetime(COALESCE(ur.created_at, o.created_at), '+' || ? || ' days')
+            -- Проверка квалификации
+            AND NOT EXISTS (
+              SELECT 1 FROM bot_db.orders o2
+              WHERE o2.user_id = ur.referred_id
+                AND o2.status IN ('PAID', 'COMPLETED')
+                AND o2.created_at < COALESCE(ur.created_at, o.created_at)
+            )
+        `).get(tgId, contest.starts_at, contest.ends_at, contest.attribution_window_days) as { tickets_total: number } | undefined;
 
+        invitedTotal = stats?.invited_total || 0;
+        qualifiedTotal = qualifiedCount?.qualified_total || 0;
         ticketsTotal = ticketsResult?.tickets_total || 0;
       }
 
       const pendingTotal = invitedTotal - qualifiedTotal;
 
-      // Рассчитываем позицию в рейтинге
-      // Считаем количество участников с большим количеством билетов
-      let rank: number | null = null;
-      let totalParticipants: number | null = null;
-
-      if (refEventsExists && ticketLedgerExists) {
-        // Получаем общее количество участников
-        const participantsResult = db.prepare(`
-          SELECT COUNT(DISTINCT referrer_id) as total_participants
-          FROM bot_db.ticket_ledger
-          WHERE contest_id = ?
-        `).get(contestId) as { total_participants: number } | undefined;
-
-        totalParticipants = participantsResult?.total_participants || 0;
-
-        // Рассчитываем позицию: сколько участников имеют больше билетов
-        if (totalParticipants > 0) {
-          // Считаем количество участников с большим количеством билетов
-          const rankResult = db.prepare(`
-            WITH user_tickets AS (
-              SELECT referrer_id, COALESCE(SUM(delta), 0) as total_tickets
-              FROM bot_db.ticket_ledger
-              WHERE contest_id = ?
-              GROUP BY referrer_id
-            ),
-            current_user_tickets AS (
-              SELECT COALESCE(SUM(delta), 0) as total_tickets
-              FROM bot_db.ticket_ledger
-              WHERE contest_id = ? AND referrer_id = ?
-            )
-            SELECT COUNT(*) + 1 as rank
-            FROM user_tickets
-            WHERE total_tickets > (SELECT total_tickets FROM current_user_tickets)
-          `).get(contestId, contestId, tgId) as { rank: number } | undefined;
-
-          rank = rankResult?.rank || null;
-
-          // Если у пользователя нет билетов, но он участвует, позиция = общее количество участников
-          if (ticketsTotal === 0 && totalParticipants > 0) {
-            rank = totalParticipants;
-          } else if (rank === null && ticketsTotal > 0) {
-            // Если пользователь есть в таблице, но запрос вернул null, значит он первый
-            rank = 1;
-          }
-        }
-      }
+      // УДАЛЕНО: Расчет rank и total_participants (не используется фронтендом)
 
       return {
         contest: {
@@ -343,8 +329,6 @@ export function getReferralSummary(
         invited_total: invitedTotal,
         qualified_total: qualifiedTotal,
         pending_total: pendingTotal,
-        rank: rank,
-        total_participants: totalParticipants,
       };
     } finally {
       db.prepare('DETACH DATABASE bot_db').run();
@@ -368,19 +352,46 @@ export function getReferralFriends(
   
   try {
     // Прикрепляем базу бота
-    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    try {
+      db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    } catch (error) {
+      console.error(`[ContestRepo] Failed to attach database: ${botDbPath}`, error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to attach bot database: ${error.message}`);
+      }
+      throw error;
+    }
     
     try {
-      // Проверяем наличие таблицы ref_events
-      const refEventsExists = db.prepare(`
-        SELECT name FROM bot_db.sqlite_master 
-        WHERE type='table' AND name='ref_events'
-      `).get() as { name: string } | undefined;
+      // Получаем конкурс для проверок периода и окна атрибуции
+      const contest = db.prepare(`
+        SELECT 
+          id,
+          title,
+          starts_at,
+          ends_at,
+          attribution_window_days,
+          rules_version,
+          is_active
+        FROM bot_db.contests
+        WHERE id = ?
+      `).get(contestId) as {
+        id: string;
+        title: string;
+        starts_at: string;
+        ends_at: string;
+        attribution_window_days: number;
+        rules_version: string;
+        is_active: number;
+      } | undefined;
 
-      const ticketLedgerExists = db.prepare(`
-        SELECT name FROM bot_db.sqlite_master 
-        WHERE type='table' AND name='ticket_ledger'
-      `).get() as { name: string } | undefined;
+      if (!contest) {
+        db.prepare('DETACH DATABASE bot_db').run();
+        return [];
+      }
+
+      // Проверяем наличие таблиц ref_events и ticket_ledger
+      const { refEventsExists, ticketLedgerExists } = checkContestTables(db, 'bot_db');
 
       let friendsRaw: Array<{
         id: string | number;
@@ -424,6 +435,7 @@ export function getReferralFriends(
         }>;
       } else {
         // Fallback на старую логику
+        // ВАЖНО: Проверяем окно атрибуции, период конкурса и квалификацию
         friendsRaw = db.prepare(`
           SELECT 
             ur.ROWID as id,
@@ -434,29 +446,38 @@ export function getReferralFriends(
                 SELECT 1 FROM bot_db.orders o 
                 WHERE o.user_id = ur.referred_id 
                 AND o.status IN ('PAID', 'COMPLETED')
+                -- Проверка периода конкурса
+                AND o.created_at >= ?
+                AND o.created_at <= ?
+                -- Проверка окна атрибуции (N дней от привязки)
+                AND o.created_at <= datetime(COALESCE(ur.created_at, o.created_at), '+' || ? || ' days')
+                -- Проверка квалификации: первый заказ должен быть ПОСЛЕ привязки
+                AND NOT EXISTS (
+                  SELECT 1 FROM bot_db.orders o2
+                  WHERE o2.user_id = ur.referred_id
+                    AND o2.status IN ('PAID', 'COMPLETED')
+                    AND o2.created_at < COALESCE(ur.created_at, o.created_at)
+                )
               ) THEN 'qualified'
               ELSE 'bound'
             END as status,
             NULL as status_reason,
             (SELECT MIN(created_at) FROM bot_db.orders WHERE user_id = ur.referred_id) as bound_at,
-            COALESCE(SUM(
-              CASE 
-                WHEN o.plan_id = 'plan_30' THEN 1
-                WHEN o.plan_id = 'plan_90' THEN 3
-                WHEN o.plan_id = 'plan_180' THEN 6
-                WHEN o.plan_id = 'plan_365' THEN 12
-                WHEN o.plan_id LIKE 'plan_%' THEN CAST(SUBSTR(o.plan_id, 6) AS INTEGER) / 30
-                ELSE 1
-              END
-            ), 0) as tickets_from_friend_total
+            COALESCE(SUM(${getTicketsFromPlanIdSQL('o.plan_id')}), 0) as tickets_from_friend_total
           FROM bot_db.user_referrals ur
           LEFT JOIN bot_db.users u ON u.id = ur.referred_id
-          LEFT JOIN bot_db.orders o ON o.user_id = ur.referred_id AND o.status IN ('PAID', 'COMPLETED')
+          LEFT JOIN bot_db.orders o ON o.user_id = ur.referred_id 
+            AND o.status IN ('PAID', 'COMPLETED')
+            -- Проверка периода конкурса
+            AND o.created_at >= ?
+            AND o.created_at <= ?
+            -- Проверка окна атрибуции
+            AND o.created_at <= datetime(COALESCE(ur.created_at, o.created_at), '+' || ? || ' days')
           WHERE ur.referrer_id = ?
           GROUP BY ur.ROWID, u.first_name, u.username
           ORDER BY bound_at DESC
           LIMIT ?
-        `).all(tgId, limit) as Array<{
+        `).all(contest.starts_at, contest.ends_at, contest.attribution_window_days, contest.starts_at, contest.ends_at, contest.attribution_window_days, tgId, limit) as Array<{
           id: number;
           name: string | null;
           tg_username: string | null;
@@ -513,14 +534,46 @@ export function getTicketHistory(
   
   try {
     // Прикрепляем базу бота
-    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    try {
+      db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    } catch (error) {
+      console.error(`[ContestRepo] Failed to attach database: ${botDbPath}`, error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to attach bot database: ${error.message}`);
+      }
+      throw error;
+    }
     
     try {
+      // Получаем конкурс для проверок периода и окна атрибуции
+      const contest = db.prepare(`
+        SELECT 
+          id,
+          title,
+          starts_at,
+          ends_at,
+          attribution_window_days,
+          rules_version,
+          is_active
+        FROM bot_db.contests
+        WHERE id = ?
+      `).get(contestId) as {
+        id: string;
+        title: string;
+        starts_at: string;
+        ends_at: string;
+        attribution_window_days: number;
+        rules_version: string;
+        is_active: number;
+      } | undefined;
+
+      if (!contest) {
+        db.prepare('DETACH DATABASE bot_db').run();
+        return [];
+      }
+
       // Проверяем наличие таблицы ticket_ledger
-      const ticketLedgerExists = db.prepare(`
-        SELECT name FROM bot_db.sqlite_master 
-        WHERE type='table' AND name='ticket_ledger'
-      `).get() as { name: string } | undefined;
+      const { ticketLedgerExists } = checkContestTables(db, 'bot_db');
 
       let history: Array<{
         id: string;
@@ -550,27 +603,26 @@ export function getTicketHistory(
         }>;
       } else {
         // Fallback на старую логику
+        // ВАЖНО: Проверяем окно атрибуции и период конкурса
         const historyFallback = db.prepare(`
           SELECT 
             o.id,
             o.created_at,
-            CASE 
-              WHEN o.plan_id = 'plan_30' THEN 1
-              WHEN o.plan_id = 'plan_90' THEN 3
-              WHEN o.plan_id = 'plan_180' THEN 6
-              WHEN o.plan_id = 'plan_365' THEN 12
-              WHEN o.plan_id LIKE 'plan_%' THEN CAST(SUBSTR(o.plan_id, 6) AS INTEGER) / 30
-              ELSE 1
-            END as delta,
+            ${getTicketsFromPlanIdSQL('o.plan_id')} as delta,
             u.first_name as invitee_name
           FROM bot_db.orders o
           JOIN bot_db.user_referrals ur ON ur.referred_id = o.user_id
           LEFT JOIN bot_db.users u ON u.id = o.user_id
           WHERE ur.referrer_id = ?
             AND o.status IN ('PAID', 'COMPLETED')
+            -- Проверка периода конкурса
+            AND o.created_at >= ?
+            AND o.created_at <= ?
+            -- Проверка окна атрибуции (N дней от привязки)
+            AND o.created_at <= datetime(COALESCE(ur.created_at, o.created_at), '+' || ? || ' days')
           ORDER BY o.created_at DESC
           LIMIT ?
-        `).all(tgId, limit) as Array<{
+        `).all(tgId, contest.starts_at, contest.ends_at, contest.attribution_window_days, limit) as Array<{
           id: string;
           created_at: number;
           delta: number;
@@ -651,14 +703,19 @@ export function getAllContestTickets(
   
   try {
     // Прикрепляем базу бота
-    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    try {
+      db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    } catch (error) {
+      console.error(`[ContestRepo] Failed to attach database: ${botDbPath}`, error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to attach bot database: ${error.message}`);
+      }
+      throw error;
+    }
     
     try {
       // Проверяем наличие таблицы ticket_ledger
-      const ticketLedgerExists = db.prepare(`
-        SELECT name FROM bot_db.sqlite_master 
-        WHERE type='table' AND name='ticket_ledger'
-      `).get() as { name: string } | undefined;
+      const { ticketLedgerExists } = checkContestTables(db, 'bot_db');
 
       if (!ticketLedgerExists) {
         console.warn('[ContestRepo] Table ticket_ledger not found');
@@ -715,19 +772,19 @@ export function getAllContestParticipants(
   
   try {
     // Прикрепляем базу бота
-    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    try {
+      db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+    } catch (error) {
+      console.error(`[ContestRepo] Failed to attach database: ${botDbPath}`, error);
+      if (error instanceof Error) {
+        throw new Error(`Failed to attach bot database: ${error.message}`);
+      }
+      throw error;
+    }
     
     try {
       // Проверяем наличие таблиц
-      const refEventsExists = db.prepare(`
-        SELECT name FROM bot_db.sqlite_master 
-        WHERE type='table' AND name='ref_events'
-      `).get() as { name: string } | undefined;
-
-      const ticketLedgerExists = db.prepare(`
-        SELECT name FROM bot_db.sqlite_master 
-        WHERE type='table' AND name='ticket_ledger'
-      `).get() as { name: string } | undefined;
+      const { refEventsExists, ticketLedgerExists } = checkContestTables(db, 'bot_db');
 
       if (!refEventsExists || !ticketLedgerExists) {
         console.warn('[ContestRepo] Tables ref_events or ticket_ledger not found');
@@ -771,11 +828,7 @@ export function getAllContestParticipants(
             COALESCE(o.plan_id, 'unknown') as plan_id,
             tl.delta as tickets,
             CASE 
-              WHEN o.plan_id = 'plan_30' THEN 1
-              WHEN o.plan_id = 'plan_90' THEN 3
-              WHEN o.plan_id = 'plan_180' THEN 6
-              WHEN o.plan_id = 'plan_365' THEN 12
-              WHEN o.plan_id LIKE 'plan_%' THEN CAST(SUBSTR(o.plan_id, 6) AS INTEGER) / 30
+              WHEN o.plan_id IS NOT NULL THEN ${getTicketsFromPlanIdSQL('o.plan_id')}
               ELSE ABS(tl.delta)
             END as months
           FROM bot_db.ticket_ledger tl
