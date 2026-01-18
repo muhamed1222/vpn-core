@@ -162,7 +162,23 @@ export async function awardTicketsForPayment(
       }
 
       // Проверяем, попадает ли заказ в период конкурса
-      const orderDate = new Date(orderCreatedAt);
+      // orderCreatedAt может быть ISO string или timestamp (миллисекунды)
+      let orderDate: Date;
+      if (typeof orderCreatedAt === 'string') {
+        // Если это ISO string или число в виде строки (timestamp)
+        const parsed = Date.parse(orderCreatedAt);
+        if (!isNaN(parsed)) {
+          orderDate = new Date(parsed);
+        } else {
+          // Пробуем как число (миллисекунды)
+          const num = Number(orderCreatedAt);
+          orderDate = isNaN(num) ? new Date() : new Date(num);
+        }
+      } else {
+        // Если это число (timestamp в миллисекундах)
+        orderDate = new Date(orderCreatedAt);
+      }
+      
       const contestStart = new Date(contest.starts_at);
       const contestEnd = new Date(contest.ends_at);
       

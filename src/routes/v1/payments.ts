@@ -120,7 +120,41 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
           const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
           if (fs.existsSync(botDbPath)) {
             try {
-              const orderCreatedAt = orderRow.created_at || new Date().toISOString();
+              // Преобразуем created_at в ISO string
+              // orderRow.created_at может быть ISO string или нужно взять из базы бота
+              let orderCreatedAt = orderRow.created_at || new Date().toISOString();
+              
+              // Если created_at не в ISO формате, попробуем получить из базы бота
+              if (botDbPath && fs.existsSync(botDbPath)) {
+                try {
+                  const { getDatabase } = await import('../../storage/db.js');
+                  const db = getDatabase();
+                  try {
+                    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+                    const botOrder = db.prepare(`
+                      SELECT created_at
+                      FROM bot_db.orders
+                      WHERE id = ?
+                      LIMIT 1
+                    `).get(orderId) as { created_at: number | string } | undefined;
+                    
+                    if (botOrder) {
+                      // created_at в базе бота - это timestamp в миллисекундах
+                      if (typeof botOrder.created_at === 'number') {
+                        orderCreatedAt = new Date(botOrder.created_at).toISOString();
+                      } else if (typeof botOrder.created_at === 'string') {
+                        const num = Number(botOrder.created_at);
+                        orderCreatedAt = !isNaN(num) ? new Date(num).toISOString() : botOrder.created_at;
+                      }
+                    }
+                    db.prepare('DETACH DATABASE bot_db').run();
+                  } catch (attachError) {
+                    // Игнорируем ошибку - используем orderRow.created_at
+                  }
+                } catch (e) {
+                  // Игнорируем - используем orderRow.created_at
+                }
+              }
               const ticketsAwarded = await awardTicketsForPayment(
                 botDbPath,
                 tgId,
