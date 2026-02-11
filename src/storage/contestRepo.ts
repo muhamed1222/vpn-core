@@ -92,7 +92,8 @@ export function getActiveContest(botDbPath: string): Contest | null {
       console.log(`[ContestRepo] Found ${allContests.length} contest(s) in database`);
       
       // Ищем активный конкурс
-      const contest = db.prepare(`
+      // Сначала ищем конкурс, который уже начался и еще не закончился
+      let contest = db.prepare(`
         SELECT 
           id,
           title,
@@ -116,6 +117,34 @@ export function getActiveContest(botDbPath: string): Contest | null {
         rules_version: string;
         is_active: number;
       } | undefined;
+
+      // Если не нашли активный конкурс, ищем конкурс, который еще не начался, но скоро начнется
+      // Это нужно для отображения таймера обратного отсчета
+      if (!contest) {
+        contest = db.prepare(`
+          SELECT 
+            id,
+            title,
+            starts_at,
+            ends_at,
+            attribution_window_days,
+            rules_version,
+            is_active
+          FROM bot_db.contests
+          WHERE is_active = 1 
+            AND starts_at > ?
+          ORDER BY starts_at ASC
+          LIMIT 1
+        `).get(now) as {
+          id: string;
+          title: string;
+          starts_at: string;
+          ends_at: string;
+          attribution_window_days: number;
+          rules_version: string;
+          is_active: number;
+        } | undefined;
+      }
 
       if (!contest) {
         // Логируем детали для отладки
