@@ -84,8 +84,9 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                 headers: {
                     'User-Agent': userAgent,
                     'Accept': request.headers['accept'] || '*/*',
-                    // Можно добавить Host, если нужно
-                    // 'Host': '127.0.0.1:8000' 
+                    'Host': request.headers['host'] || 'vpn.outlivion.space',
+                    'X-Real-IP': ipAddress,
+                    'X-Forwarded-For': request.headers['x-forwarded-for'] || ipAddress
                 },
                 responseType: 'stream' // Важно для производительности
             });
