@@ -30,6 +30,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
     jwtSecret,
     cookieName,
     botToken: botToken, // Добавляем botToken для поддержки initData
+    adminApiKey: fastify.adminApiKey,
   });
 
   fastify.post<{ Body: unknown }>(
