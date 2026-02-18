@@ -10,6 +10,7 @@ import fs from 'fs';
 
 const createOrderSchema = z.object({
   planId: z.string().min(1),
+  returnUrlBase: z.string().url().optional(),
   // userRef больше не принимаем из body, берем из request.user
 });
 
@@ -18,12 +19,14 @@ export async function ordersRoutes(fastify: FastifyInstance) {
   const yookassaReturnUrl: string = fastify.yookassaReturnUrl;
   const jwtSecret: string = fastify.authJwtSecret;
   const cookieName: string = fastify.authCookieName;
+  const adminApiKey: string = fastify.adminApiKey;
 
   // Middleware для проверки авторизации
   const verifyAuth = createVerifyAuth({
     jwtSecret,
     cookieName,
     botToken: fastify.telegramBotToken, // Добавляем botToken для поддержки initData
+    adminApiKey,
   });
 
   // POST /v1/orders/create
@@ -38,6 +41,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           properties: {
             planId: { type: 'string' },
             tgId: { type: 'number' },
+            returnUrlBase: { type: 'string' },
           },
         },
       },
@@ -60,7 +64,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { planId, tgId } = request.body;
+      const { planId, tgId, returnUrlBase } = request.body as any;
 
       // Проверка: если пользователь пытается купить plan_7, но у него уже есть оплаченные ордера - отклоняем
       if (planId === 'plan_7') {
@@ -86,7 +90,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         }
 
         // Дополнительная проверка через базу бота
-        const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+        const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
         if (fs.existsSync(botDbPath)) {
           try {
             const { getDatabase } = await import('../../storage/db.js');
@@ -138,7 +142,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
       let amount = getPlanPrice(planId);
 
       // Проверяем скидку пользователя из базы бота
-      const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+      const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
       let discountPercent = 0;
 
       if (fs.existsSync(botDbPath)) {
@@ -193,6 +197,17 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         );
       }
 
+      let resolvedReturnUrl = yookassaReturnUrl;
+      if (returnUrlBase) {
+        try {
+          const u = new URL(returnUrlBase);
+          u.searchParams.set('orderId', orderId);
+          resolvedReturnUrl = u.toString();
+        } catch (e) {
+          fastify.log.warn({ err: e, returnUrlBase }, 'Invalid returnUrlBase, using default yookassaReturnUrl');
+        }
+      }
+
       try {
         // Сначала создаем заказ в БД со статусом pending
         ordersRepo.createOrder({
@@ -211,7 +226,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           capture: true,
           confirmation: {
             type: 'redirect',
-            return_url: yookassaReturnUrl,
+            return_url: resolvedReturnUrl,
           },
           description: `Outlivion plan ${planId}, order ${orderId}`,
           metadata: {
@@ -226,7 +241,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
             },
             items: [
               {
-                description: `Outlivion VPN plan: ${planId}`,
+                description: `vpn-web plan: ${planId}`,
                 quantity: '1.00',
                 amount: {
                   value: amount.value,
@@ -352,13 +367,15 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Проверяем, что заказ принадлежит текущему пользователю
-      const expectedUserRef = `tg_${request.user.tgId}`;
-      if (orderRow.user_ref !== expectedUserRef) {
-        return reply.status(403).send({
-          error: 'Forbidden',
-          message: 'Access denied: order belongs to another user',
-        });
+      // Проверяем, что заказ принадлежит текущему пользователю (кроме adminApiKey)
+      if (!request.user.isAdmin) {
+        const expectedUserRef = `tg_${request.user.tgId}`;
+        if (orderRow.user_ref !== expectedUserRef) {
+          return reply.status(403).send({
+            error: 'Forbidden',
+            message: 'Access denied: order belongs to another user',
+          });
+        }
       }
 
       const response: GetOrderResponse = {
@@ -400,4 +417,3 @@ export async function ordersRoutes(fastify: FastifyInstance) {
     }
   );
 }
-

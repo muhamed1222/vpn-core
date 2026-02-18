@@ -99,7 +99,7 @@ Uptime: с 01:42:35 UTC
 ### 7. Проверка логов на ошибки
 
 ```bash
-$ journalctl -u outlivion-api.service -n 50 | grep -iE 'error|fail|warn|exception'
+$ journalctl -u vpn-core.service -n 50 | grep -iE 'error|fail|warn|exception'
 Ошибок не найдено ✅
 ```
 

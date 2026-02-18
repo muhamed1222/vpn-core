@@ -18,7 +18,7 @@
 - **Итого у вас: 15 билетов**
 
 ### 2. ❌ Обработчик `successful_payment` НЕ СРАБАТЫВАЕТ
-- **Код существует:** `/root/vpn_bot/src/bot/index.ts` строка 1045
+- **Код существует:** `/root/vpn-bot/src/bot/index.ts` строка 1045
 - **Логи отсутствуют:** нет ни одного лога от обработчика
 - **Новый заказ:** `ord_6734560e-bac4-4097-86fe-f9b86eedbd55` (04:47:03)
 - **Результат:** заказ COMPLETED, но билет не начислен
@@ -35,7 +35,7 @@
 
 ### Шаг 1: Добавлено диагностическое логирование
 
-**Изменено:** `/root/vpn_bot/src/bot/index.ts`
+**Изменено:** `/root/vpn-bot/src/bot/index.ts`
 
 ```typescript
 bot.on('successful_payment', async (ctx) => {
@@ -113,7 +113,7 @@ VALUES (
 
 1. **Откройте мониторинг логов:**
    ```bash
-   ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log"
+   ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log"
    ```
 
 2. **Сделайте покупку** через бота (любой тариф, даже 7 дней)
@@ -156,7 +156,7 @@ VALUES (
 ### Способ 1: Проверить текущий режим
 
 ```bash
-ssh root@72.56.93.135 "cat /root/vpn_bot/.env | grep TELEGRAM_USE_POLLING"
+ssh root@72.56.93.135 "cat /root/vpn-bot/.env | grep TELEGRAM_USE_POLLING"
 ```
 
 **Ожидается:**
@@ -168,7 +168,7 @@ ssh root@72.56.93.135 "cat /root/vpn_bot/.env | grep TELEGRAM_USE_POLLING"
 ### Способ 2: Проверить webhook в логах
 
 ```bash
-ssh root@72.56.93.135 "grep -i 'webhook' /root/vpn_bot/bot.log | tail -10"
+ssh root@72.56.93.135 "grep -i 'webhook' /root/vpn-bot/bot.log | tail -10"
 ```
 
 **Ожидается:**
@@ -189,7 +189,7 @@ ssh root@72.56.93.135 "grep -i 'webhook' /root/vpn_bot/bot.log | tail -10"
 **Решение:**
 ```bash
 # Переключиться на Polling
-echo "TELEGRAM_USE_POLLING=1" >> /root/vpn_bot/.env
+echo "TELEGRAM_USE_POLLING=1" >> /root/vpn-bot/.env
 systemctl restart vpn-bot
 ```
 
@@ -221,7 +221,7 @@ curl -X POST https://vpn.outlivion.space/webhook/telegram \
 **Решение:**
 ```bash
 # Проверить токен бота
-ssh root@72.56.93.135 "cat /root/vpn_bot/.env | grep TELEGRAM_BOT_TOKEN"
+ssh root@72.56.93.135 "cat /root/vpn-bot/.env | grep TELEGRAM_BOT_TOKEN"
 
 # Проверить соединение
 curl https://api.telegram.org/bot<TOKEN>/getMe
@@ -236,7 +236,7 @@ curl https://api.telegram.org/bot<TOKEN>/getMe
 ### Ручное начисление билетов
 
 ```bash
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 -- Найти заказы без билетов
 SELECT o.id, o.user_id, o.plan_id, datetime(o.created_at/1000, '\''unixepoch'\'') as created
 FROM orders o
@@ -282,7 +282,7 @@ VALUES (
 ### 1️⃣ Откройте терминал для логов
 
 ```bash
-ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log"
+ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log"
 ```
 
 ### 2️⃣ Сделайте тестовую покупку
@@ -302,8 +302,8 @@ ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log"
 
 | Файл | Изменение | Бэкап |
 |------|-----------|-------|
-| `/root/vpn_bot/src/bot/index.ts` | Добавлены диагностические логи в `successful_payment` | `.backup` |
-| `/root/vpn_bot/src/services/orderProcessingService.ts` | Добавлены логи в `activateOrder` | `.backup` |
+| `/root/vpn-bot/src/bot/index.ts` | Добавлены диагностические логи в `successful_payment` | `.backup` |
+| `/root/vpn-bot/src/services/orderProcessingService.ts` | Добавлены логи в `activateOrder` | `.backup` |
 
 ---
 
@@ -334,12 +334,12 @@ ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log"
 
 1. Сохранить логи:
    ```bash
-   ssh root@72.56.93.135 "tail -200 /root/vpn_bot/bot.log" > test_purchase_logs.txt
+   ssh root@72.56.93.135 "tail -200 /root/vpn-bot/bot.log" > test_purchase_logs.txt
    ```
 
 2. Проверить заказ в БД:
    ```bash
-   ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+   ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
    SELECT * FROM orders 
    WHERE user_id = 782245481 
    ORDER BY created_at DESC 
@@ -349,7 +349,7 @@ ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log"
 
 3. Проверить билеты:
    ```bash
-   ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+   ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
    SELECT * FROM ticket_ledger 
    WHERE referrer_id = 782245481 
    ORDER BY created_at DESC 

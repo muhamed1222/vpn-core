@@ -47,7 +47,7 @@ found 0 vulnerabilities
 
 **Проверка:**
 ```bash
-ls -la /opt/outlivion-api/dist/services/
+ls -la /opt/vpn-core/dist/services/
 # awardRetryScheduler.js ✅
 # awardRetryScheduler.d.ts ✅
 # awardRetryScheduler.js.map ✅
@@ -60,7 +60,7 @@ ls -la /opt/outlivion-api/dist/services/
 **Статус:** ✅ **УСПЕШНО**
 
 ```
-● outlivion-api.service - Outlivion API
+● vpn-core.service - Outlivion API
    Active: active (running) since Sun 2026-01-18 03:50:34 UTC
    Main PID: 752270 (node)
    Memory: 35.3M
@@ -164,10 +164,10 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ```bash
 # Следить за логами планировщика
-journalctl -u outlivion-api -f | grep -i scheduler
+journalctl -u vpn-core -f | grep -i scheduler
 
 # Проверка ошибок начисления
-journalctl -u outlivion-api -f | grep -i "award\|ticket"
+journalctl -u vpn-core -f | grep -i "award\|ticket"
 ```
 
 ### 3. Проверка работы транзакций

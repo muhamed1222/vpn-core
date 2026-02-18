@@ -6,7 +6,7 @@
 import { getDatabase } from '../src/storage/db.js';
 import { awardTicketsForPayment } from '../src/storage/contestUtils.js';
 
-const BOT_DB_PATH = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+const BOT_DB_PATH = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
 const API_DB_PATH = './data/db.sqlite';
 
 async function awardMissingTickets() {

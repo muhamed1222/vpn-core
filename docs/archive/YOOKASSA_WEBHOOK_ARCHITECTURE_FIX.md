@@ -10,8 +10,8 @@
 ### Архитектурная проблема двух баз данных
 
 **Текущая ситуация:**
-- **База бота:** `/root/vpn_bot/data/database.sqlite` (280 заказов)
-- **База API:** `/root/vpn_api/data/db.sqlite` (1 заказ)
+- **База бота:** `/root/vpn-bot/data/database.sqlite` (280 заказов)
+- **База API:** `/root/vpn-core/data/db.sqlite` (1 заказ)
 
 **Что происходит:**
 1. Пользователь оплачивает через бота (кнопка "🇷🇺 Банковская карта РФ")
@@ -46,7 +46,7 @@
 
 ### Долгосрочное (код исправление)
 
-**Файл:** `/root/vpn_api/src/routes/v1/payments.ts`
+**Файл:** `/root/vpn-core/src/routes/v1/payments.ts`
 
 **НАЙТИ (строка ~35):**
 ```typescript
@@ -62,7 +62,7 @@ let orderRow = ordersRepo.getOrder(orderId);
 if (!orderRow) {
   const { getDatabase } = await import('../../storage/db.js');
   const db = getDatabase();
-  const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+  const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
   
   if (fs.existsSync(botDbPath)) {
     try {
@@ -103,14 +103,14 @@ if (!orderRow) {
 ### 1. Создать резервную копию
 ```bash
 ssh root@72.56.93.135
-cd /root/vpn_api/src/routes/v1
+cd /root/vpn-core/src/routes/v1
 cp payments.ts payments.ts.backup_$(date +%s)
 ```
 
 ### 2. Применить исправление
 ```bash
 # Отредактировать файл вручную:
-nano /root/vpn_api/src/routes/v1/payments.ts
+nano /root/vpn-core/src/routes/v1/payments.ts
 
 # Найти строку ~35: const orderRow = ordersRepo.getOrder(orderId);
 # Заменить на код выше
@@ -118,13 +118,13 @@ nano /root/vpn_api/src/routes/v1/payments.ts
 
 ### 3. Перезапустить API
 ```bash
-systemctl restart outlivion-api
-systemctl status outlivion-api
+systemctl restart vpn-core
+systemctl status vpn-core
 ```
 
 ### 4. Проверить логи
 ```bash
-journalctl -u outlivion-api -f
+journalctl -u vpn-core -f
 ```
 
 ---
@@ -137,7 +137,7 @@ journalctl -u outlivion-api -f
 2. Дождаться webhook от YooKassa (~5-10 сек)
 3. Проверить логи API:
    ```bash
-   journalctl -u outlivion-api -n 50 | grep -A 10 'Webhook'
+   journalctl -u vpn-core -n 50 | grep -A 10 'Webhook'
    ```
 4. Должно появиться: `[Webhook] Order found in bot database`
 5. Проверить в боте: подписка должна продлиться автоматически

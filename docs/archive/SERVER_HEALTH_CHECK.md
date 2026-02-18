@@ -12,9 +12,9 @@
 
 **Команды для проверки:**
 ```bash
-systemctl status outlivion-api
+systemctl status vpn-core
 curl http://localhost:3001/
-journalctl -u outlivion-api -n 50
+journalctl -u vpn-core -n 50
 ```
 
 **Что должно быть:**
@@ -28,11 +28,11 @@ journalctl -u outlivion-api -n 50
 
 **Проверка:**
 ```bash
-cat /opt/outlivion-api/.env | grep -E '(BOT_DATABASE_PATH|ADMIN_ID|ADMIN_API_KEY)'
+cat /opt/vpn-core/.env | grep -E '(BOT_DATABASE_PATH|ADMIN_ID|ADMIN_API_KEY)'
 ```
 
 **Должно быть:**
-- ✅ `BOT_DATABASE_PATH=/root/vpn_bot/data/database.sqlite`
+- ✅ `BOT_DATABASE_PATH=/root/vpn-bot/data/database.sqlite`
 - ✅ `ADMIN_ID=7972426786`
 - ✅ `ADMIN_API_KEY=A246123b` (или ваш ключ)
 
@@ -42,8 +42,8 @@ cat /opt/outlivion-api/.env | grep -E '(BOT_DATABASE_PATH|ADMIN_ID|ADMIN_API_KEY
 
 **Проверка:**
 ```bash
-ls -la /root/vpn_bot/data/database.sqlite
-sqlite3 /root/vpn_bot/data/database.sqlite ".tables"
+ls -la /root/vpn-bot/data/database.sqlite
+sqlite3 /root/vpn-bot/data/database.sqlite ".tables"
 ```
 
 **Должно быть:**
@@ -56,7 +56,7 @@ sqlite3 /root/vpn_bot/data/database.sqlite ".tables"
 
 **Проверка:**
 ```bash
-sqlite3 /root/vpn_bot/data/database.sqlite "SELECT id, title, is_active, starts_at, ends_at FROM contests WHERE is_active = 1;"
+sqlite3 /root/vpn-bot/data/database.sqlite "SELECT id, title, is_active, starts_at, ends_at FROM contests WHERE is_active = 1;"
 ```
 
 **Должно быть:**
@@ -69,7 +69,7 @@ sqlite3 /root/vpn_bot/data/database.sqlite "SELECT id, title, is_active, starts_
 
 **Проверка:**
 ```bash
-ls -la /opt/outlivion-api/dist/routes/v1/*.js
+ls -la /opt/vpn-core/dist/routes/v1/*.js
 ```
 
 **Должно быть:**
@@ -85,19 +85,19 @@ ls -la /opt/outlivion-api/dist/routes/v1/*.js
 
 **Решение:**
 ```bash
-sudo systemctl restart outlivion-api
-sudo systemctl status outlivion-api
-journalctl -u outlivion-api -n 100
+sudo systemctl restart vpn-core
+sudo systemctl status vpn-core
+journalctl -u vpn-core -n 100
 ```
 
 ### Проблема: Нет файлов после деплоя
 
 **Решение:**
 ```bash
-cd /opt/outlivion-api
+cd /opt/vpn-core
 git pull
 npm run build
-sudo systemctl restart outlivion-api
+sudo systemctl restart vpn-core
 ```
 
 ### Проблема: База данных недоступна
@@ -105,13 +105,13 @@ sudo systemctl restart outlivion-api
 **Решение:**
 ```bash
 # Проверьте путь
-cat /opt/outlivion-api/.env | grep BOT_DATABASE_PATH
+cat /opt/vpn-core/.env | grep BOT_DATABASE_PATH
 
 # Проверьте права
-ls -la /root/vpn_bot/data/database.sqlite
+ls -la /root/vpn-bot/data/database.sqlite
 
 # Если нет прав, дайте их
-sudo chmod 644 /root/vpn_bot/data/database.sqlite
+sudo chmod 644 /root/vpn-bot/data/database.sqlite
 ```
 
 ---
@@ -132,7 +132,7 @@ sudo chmod 644 /root/vpn_bot/data/database.sqlite
 
 Все изменения сделаны через Git, поэтому можно легко откатить:
 ```bash
-cd /opt/outlivion-api
+cd /opt/vpn-core
 git log --oneline -10  # Посмотреть последние коммиты
 git revert <commit_hash>  # Откатить конкретный коммит
 ```

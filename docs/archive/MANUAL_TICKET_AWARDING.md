@@ -2,7 +2,7 @@
 
 ## Процесс ручного начисления билетов
 
-Я использую прямой SQL запрос к базе данных бота (`/root/vpn_bot/data/database.sqlite`) для вставки записи в таблицу `ticket_ledger`.
+Я использую прямой SQL запрос к базе данных бота (`/root/vpn-bot/data/database.sqlite`) для вставки записи в таблицу `ticket_ledger`.
 
 ---
 
@@ -198,7 +198,7 @@ ord_a357d644...|550e8400-...|782245481|782245481|ord_a357d644...|1|SELF_PURCHASE
 ## Команда для быстрого начисления
 
 ```bash
-ssh root@72.56.93.135 "cd /root/vpn_bot && sqlite3 data/database.sqlite \"
+ssh root@72.56.93.135 "cd /root/vpn-bot && sqlite3 data/database.sqlite \"
 INSERT INTO ticket_ledger (
   id, contest_id, referrer_id, referred_id, order_id, delta, reason, created_at
 )

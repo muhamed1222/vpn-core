@@ -207,7 +207,7 @@ git push origin main
 [main fc4275c] Fix: добавлен запрет кеширования...
  6 files changed, 133 insertions(+), 36 deletions(-)
 
-To https://github.com/muhamed1222/vpnwebsite.git
+To https://github.com/muhamed1222/vpn-tg-app.git
    a305801..fc4275c  main -> main
 ```
 

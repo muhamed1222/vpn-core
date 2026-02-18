@@ -82,7 +82,7 @@ TypeScript типы и интерфейсы:
 Конфигурационные файлы для развертывания:
 
 - `nginx/api.outlivion.space.conf` - конфигурация Nginx для проксирования запросов к API
-- `systemd/outlivion-api.service` - systemd unit файл для запуска сервиса как системного демона
+- `systemd/vpn-core.service` - systemd unit файл для запуска сервиса как системного демона
 
 ### Директория `data/`
 

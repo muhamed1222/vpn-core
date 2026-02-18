@@ -11,12 +11,14 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
   const jwtSecret = fastify.authJwtSecret;
   const cookieName = fastify.authCookieName;
   const botToken = fastify.telegramBotToken;
+  const adminApiKey = fastify.adminApiKey;
 
   // Опциональная авторизация для проверки доступности пробного периода
   const verifyAuthOptional = createVerifyAuth({
     jwtSecret,
     cookieName,
     botToken,
+    adminApiKey,
   });
 
   /**
@@ -51,7 +53,7 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
 
       // Дополнительная проверка через базу бота (если доступна)
       // Пробуем стандартный путь, если переменная окружения не установлена
-      const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+      const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
       if (trialAvailable && fs.existsSync(botDbPath)) {
         try {
           const { getDatabase } = await import('../../storage/db.js');
@@ -123,4 +125,3 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
     return reply.send(tariffs);
   });
 }
-

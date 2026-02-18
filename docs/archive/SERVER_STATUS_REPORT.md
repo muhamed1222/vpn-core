@@ -15,7 +15,7 @@
 - ✅ Uptime: 14+ минут без перезапусков
 - ✅ PID: 531820
 - ✅ Память: 20.6M (нормально)
-- ✅ API отвечает на запросы: `{"ok":true,"service":"outlivion-api"}`
+- ✅ API отвечает на запросы: `{"ok":true,"service":"vpn-core"}`
 
 ---
 
@@ -24,7 +24,7 @@
 **Статус:** ✅ **НАСТРОЕНО**
 
 ```
-✅ BOT_DATABASE_PATH=/root/vpn_bot/data/database.sqlite
+✅ BOT_DATABASE_PATH=/root/vpn-bot/data/database.sqlite
 ✅ ADMIN_ID=7972426786
 ✅ ADMIN_API_KEY=A246123b (новый ключ, используется)
 ⚠️  ADMIN_API_KEY=bot_admin_key_super_secret_2024 (старый, можно удалить)
@@ -38,7 +38,7 @@
 
 **Статус:** ✅ **ДОСТУПНА**
 
-- ✅ Файл существует: `/root/vpn_bot/data/database.sqlite`
+- ✅ Файл существует: `/root/vpn-bot/data/database.sqlite`
 - ✅ Права доступа: корректные
 - ✅ Таблицы присутствуют
 
@@ -136,12 +136,12 @@ ID: 550e8400-e29b-41d4-a716-446655440000
    ```bash
    # На сервере
    ssh root@72.56.93.135
-   # Отредактировать /opt/outlivion-api/.env и удалить старую строку
+   # Отредактировать /opt/vpn-core/.env и удалить старую строку
    ```
 
 2. **Проверить логи периодически:**
    ```bash
-   journalctl -u outlivion-api -n 100
+   journalctl -u vpn-core -n 100
    ```
 
 3. **Следить за использованием памяти:**

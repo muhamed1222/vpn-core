@@ -1,4 +1,4 @@
-# Быстрая синхронизация vpn_api на сервер
+# Быстрая синхронизация vpn-core на сервер
 
 ## Файлы для синхронизации:
 1. `src/auth/telegram.ts` (5.1K)
@@ -9,23 +9,23 @@
 
 ### Вариант 1: Использовать скрипт
 ```bash
-cd /Users/kelemetovmuhamed/Documents/vpn_api
+cd /Users/kelemetovmuhamed/Documents/vpn-core
 ./sync_to_server.sh
 ```
 
 ### Вариант 2: Выполнить вручную
 ```bash
 # Копирование файлов
-scp src/auth/telegram.ts root@72.56.93.135:/root/vpn_api/src/auth/telegram.ts
-scp src/auth/telegramPhoto.ts root@72.56.93.135:/root/vpn_api/src/auth/telegramPhoto.ts
-scp src/routes/v1/auth.ts root@72.56.93.135:/root/vpn_api/src/routes/v1/auth.ts
+scp src/auth/telegram.ts root@72.56.93.135:/root/vpn-core/src/auth/telegram.ts
+scp src/auth/telegramPhoto.ts root@72.56.93.135:/root/vpn-core/src/auth/telegramPhoto.ts
+scp src/routes/v1/auth.ts root@72.56.93.135:/root/vpn-core/src/routes/v1/auth.ts
 
 # Перезапуск API на сервере
 ssh root@72.56.93.135
-cd /root/vpn_api
+cd /root/vpn-core
 npm run build
-pm2 restart vpn_api
-pm2 logs vpn_api --lines 20
+pm2 restart vpn-core
+pm2 logs vpn-core --lines 20
 ```
 
 ## Что изменилось:

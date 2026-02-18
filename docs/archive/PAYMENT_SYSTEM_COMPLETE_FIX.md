@@ -18,24 +18,24 @@
 
 **Код до исправления:**
 ```typescript
-// ❌ vpn_bot/src/services/yookassaService.ts
+// ❌ vpn-bot/src/services/yookassaService.ts
 metadata: {
     order_id: params.orderId  // underscore
 }
 
-// ❌ vpn_api/src/routes/v1/payments.ts
+// ❌ vpn-core/src/routes/v1/payments.ts
 const orderId = object.metadata?.orderId;  // camelCase
 ```
 
 **Исправление:**
 ```typescript
-// ✅ vpn_bot/src/services/yookassaService.ts  
+// ✅ vpn-bot/src/services/yookassaService.ts  
 metadata: {
     orderId: params.orderId  // camelCase
 }
 ```
 
-**Файл:** `/root/vpn_bot/src/services/yookassaService.ts`  
+**Файл:** `/root/vpn-bot/src/services/yookassaService.ts`  
 **Статус:** ✅ ИСПРАВЛЕНО
 
 ---
@@ -45,7 +45,7 @@ metadata: {
 
 **Код до исправления:**
 ```typescript
-// ❌ vpn_bot/src/bot/index.ts (2 места)
+// ❌ vpn-bot/src/bot/index.ts (2 места)
 
 // В pre_checkout_query (строка ~1028):
 const invoiceAmount = total_amount / 100; // ❌ XTR уже в целых единицах
@@ -63,7 +63,7 @@ const invoiceAmount = total_amount; // XTR не нужно делить
 const paymentAmount = payment.total_amount; // XTR уже в целых единицах
 ```
 
-**Файл:** `/root/vpn_bot/src/bot/index.ts`  
+**Файл:** `/root/vpn-bot/src/bot/index.ts`  
 **Статус:** ✅ ИСПРАВЛЕНО
 
 ---
@@ -73,7 +73,7 @@ const paymentAmount = payment.total_amount; // XTR уже в целых един
 
 **Код до исправления:**
 ```typescript
-// ❌ vpn_bot/src/services/contestService.ts
+// ❌ vpn-bot/src/services/contestService.ts
 function getDb(): Database.Database {
   const sqliteDb = DB as any;
   if (sqliteDb.db) {
@@ -87,7 +87,7 @@ function getDb(): Database.Database {
 
 **Шаг 1:** Добавил метод `getDatabase()` в SQLiteDB
 ```typescript
-// ✅ vpn_bot/src/db/sqlite.ts
+// ✅ vpn-bot/src/db/sqlite.ts
 export const SQLiteDB = {
     // ... все существующие методы ...
     
@@ -102,15 +102,15 @@ export const SQLiteDB = {
 
 **Шаг 2:** Обновил ContestService
 ```typescript
-// ✅ vpn_bot/src/services/contestService.ts
+// ✅ vpn-bot/src/services/contestService.ts
 function getDb(): Database.Database {
   return DB.getDatabase();
 }
 ```
 
 **Файлы:**
-- `/root/vpn_bot/src/db/sqlite.ts` 
-- `/root/vpn_bot/src/services/contestService.ts`
+- `/root/vpn-bot/src/db/sqlite.ts` 
+- `/root/vpn-bot/src/services/contestService.ts`
 
 **Статус:** ✅ ИСПРАВЛЕНО
 
@@ -167,11 +167,11 @@ ord_b6861227-1c04-486a-91b3-1088ca589598: COMPLETED ✅
 
 | Файл | Изменение | Статус |
 |------|-----------|--------|
-| `/root/vpn_bot/src/services/yookassaService.ts` | Metadata: `order_id` → `orderId` | ✅ |
-| `/root/vpn_bot/src/bot/index.ts` | XTR: убрано деление на 100 (2 места) | ✅ |
-| `/root/vpn_bot/src/db/sqlite.ts` | Добавлен `getDatabase()` | ✅ |
-| `/root/vpn_bot/src/services/contestService.ts` | Использование `DB.getDatabase()` | ✅ |
-| `/root/vpn_api/src/routes/v1/payments.ts` | Детальное логирование webhook | ✅ |
+| `/root/vpn-bot/src/services/yookassaService.ts` | Metadata: `order_id` → `orderId` | ✅ |
+| `/root/vpn-bot/src/bot/index.ts` | XTR: убрано деление на 100 (2 места) | ✅ |
+| `/root/vpn-bot/src/db/sqlite.ts` | Добавлен `getDatabase()` | ✅ |
+| `/root/vpn-bot/src/services/contestService.ts` | Использование `DB.getDatabase()` | ✅ |
+| `/root/vpn-core/src/routes/v1/payments.ts` | Детальное логирование webhook | ✅ |
 
 ---
 
@@ -182,7 +182,7 @@ ord_b6861227-1c04-486a-91b3-1088ca589598: COMPLETED ✅
 
 **Команда для проверки:**
 ```bash
-sqlite3 /root/vpn_bot/data/database.sqlite "
+sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT 
     referrer_id, 
     SUM(delta) as total_tickets 
@@ -209,10 +209,10 @@ GROUP BY referrer_id;
 
 ```bash
 # Логи API
-journalctl -u outlivion-api --since '1 minute ago' | grep -E '\[Webhook\]'
+journalctl -u vpn-core --since '1 minute ago' | grep -E '\[Webhook\]'
 
 # Проверка заказа
-sqlite3 /root/vpn_bot/data/database.sqlite "
+sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT id, status, amount, provider_payment_charge_id 
 FROM orders 
 WHERE user_id = 782245481 

@@ -22,7 +22,7 @@ API webhook обработчик не находил заказы из базы 
 
 ### 1. **Поиск заказов в базе бота**
 
-**Файл:** `/root/vpn_api/src/routes/v1/payments.ts` (строки 58-96)
+**Файл:** `/root/vpn-core/src/routes/v1/payments.ts` (строки 58-96)
 
 **Добавлено:**
 ```typescript
@@ -33,7 +33,7 @@ let orderRow = ordersRepo.getOrder(orderId);
 if (!orderRow) {
   const { getDatabase } = await import('../../storage/db.js');
   const db = getDatabase();
-  const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+  const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
   
   if (fs.existsSync(botDbPath)) {
     try {
@@ -69,7 +69,7 @@ if (!orderRow) {
 
 ### 2. **Обработка статусов из базы бота**
 
-**Файл:** `/root/vpn_api/src/routes/v1/payments.ts` (строки 113, 119)
+**Файл:** `/root/vpn-core/src/routes/v1/payments.ts` (строки 113, 119)
 
 **Было:**
 ```typescript
@@ -94,7 +94,7 @@ if (((orderRow.status as any) === 'paid' || (orderRow.status as any) === 'CREATE
 
 ### 3. **Отправка уведомлений**
 
-**Файл:** `/root/vpn_api/src/routes/v1/payments.ts` (строки 215-228)
+**Файл:** `/root/vpn-core/src/routes/v1/payments.ts` (строки 215-228)
 
 **Уже было в коде, теперь выполняется:**
 ```typescript
@@ -169,8 +169,8 @@ YooKassa → POST https://api.outlivion.space/v1/payments/webhook
 **Статус:** Работает автоматически ✅
 
 ### Базы данных
-- **API база:** `/root/vpn_api/data/db.sqlite` (1 заказ)
-- **Бот база:** `/root/vpn_bot/data/database.sqlite` (280+ заказов)
+- **API база:** `/root/vpn-core/data/db.sqlite` (1 заказ)
+- **Бот база:** `/root/vpn-bot/data/database.sqlite` (280+ заказов)
 - **Логика:** API ищет сначала в своей базе, потом в базе бота ✅
 
 ### Статусы заказов
@@ -249,8 +249,8 @@ vless://...
 Созданы резервные копии всех измененных файлов:
 
 ```bash
-/root/vpn_api/src/routes/v1/payments.ts.backup_[timestamp]
-/root/vpn_api/src/routes/v1/payments.ts.backup_webhook_logic
+/root/vpn-core/src/routes/v1/payments.ts.backup_[timestamp]
+/root/vpn-core/src/routes/v1/payments.ts.backup_webhook_logic
 ```
 
 ---
@@ -259,7 +259,7 @@ vless://...
 
 ### 1. Telegram Stars (XTR)
 - **Исправлено:** Деление на 100 убрано для XTR
-- **Файл:** `/root/vpn_bot/src/bot/index.ts`
+- **Файл:** `/root/vpn-bot/src/bot/index.ts`
 - **Статус:** ✅ Работает
 
 ### 2. Кнопка "🔑 Показать VPN ключ"
@@ -269,7 +269,7 @@ vless://...
 
 ### 3. Polling режим
 - **Включено:** `TELEGRAM_USE_POLLING=1`
-- **Файл:** `/root/vpn_bot/.env`
+- **Файл:** `/root/vpn-bot/.env`
 - **Статус:** ✅ Работает
 
 ---
@@ -278,18 +278,18 @@ vless://...
 
 ### 1. Исходный код обновлен
 ```bash
-/root/vpn_api/src/routes/v1/payments.ts
+/root/vpn-core/src/routes/v1/payments.ts
 ```
 
 ### 2. TypeScript скомпилирован
 ```bash
-cd /root/vpn_api && npm run build
+cd /root/vpn-core && npm run build
 ```
-**Результат:** `/root/vpn_api/dist/routes/v1/payments.js` (06:25)
+**Результат:** `/root/vpn-core/dist/routes/v1/payments.js` (06:25)
 
 ### 3. API перезапущен
 ```bash
-systemctl restart outlivion-api
+systemctl restart vpn-core
 ```
 **PID:** 772798  
 **Порт:** 127.0.0.1:3001  

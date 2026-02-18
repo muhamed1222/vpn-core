@@ -19,7 +19,7 @@
 
 **Результат:** ✅ **УСПЕХ**
 ```
-> outlivion-api@1.0.0 build
+> vpn-core@1.0.0 build
 > tsc
 ```
 

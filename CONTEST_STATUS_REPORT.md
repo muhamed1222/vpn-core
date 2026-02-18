@@ -115,7 +115,7 @@
 
 - Следите за логами: `tail -f /var/log/contest-broadcast.log`
 - Проверяйте билеты: `sqlite3 data/database.sqlite "SELECT * FROM ticket_ledger WHERE contest_id = 'contest-2026-01-20'"`
-- Мониторьте API: `journalctl -u outlivion-api -f`
+- Мониторьте API: `journalctl -u vpn-core -f`
 
 ---
 

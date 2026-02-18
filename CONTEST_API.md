@@ -95,7 +95,7 @@
 Для создания конкурса в базе данных бота используйте скрипт:
 
 ```bash
-cd vpn_bot
+cd vpn-bot
 npx ts-node scripts/create_contest.ts
 ```
 

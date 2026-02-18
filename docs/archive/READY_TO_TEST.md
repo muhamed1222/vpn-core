@@ -76,7 +76,7 @@
 ### Для Telegram Stars:
 
 ```bash
-ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep --line-buffered TELEGRAM_PAYMENT"
+ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log | grep --line-buffered TELEGRAM_PAYMENT"
 ```
 
 **Ожидаемые логи:**
@@ -91,7 +91,7 @@ ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep --line-buffered TELE
 ### Для YooKassa:
 
 ```bash
-ssh root@72.56.93.135 "journalctl -u outlivion-api.service -f | grep --line-buffered -E 'webhook|payment|ticket'"
+ssh root@72.56.93.135 "journalctl -u vpn-core.service -f | grep --line-buffered -E 'webhook|payment|ticket'"
 ```
 
 **Ожидаемые логи:**
@@ -107,7 +107,7 @@ ssh root@72.56.93.135 "journalctl -u outlivion-api.service -f | grep --line-buff
 ## Как проверить билеты через SQL
 
 ```bash
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT SUM(delta) as total_tickets 
 FROM ticket_ledger 
 WHERE referrer_id = 782245481 
@@ -137,7 +137,7 @@ WHERE referrer_id = 782245481
 
 1. **Проверить логи бота:**
    ```bash
-   ssh root@72.56.93.135 "tail -200 /root/vpn_bot/bot.log | grep TELEGRAM_PAYMENT"
+   ssh root@72.56.93.135 "tail -200 /root/vpn-bot/bot.log | grep TELEGRAM_PAYMENT"
    ```
 
 2. **Если логов нет:**
@@ -148,14 +148,14 @@ WHERE referrer_id = 782245481
 3. **Начислить вручную:**
    ```bash
    # Найти ID заказа
-   ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+   ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
    SELECT id, status FROM orders 
    WHERE user_id = 782245481 
    ORDER BY created_at DESC LIMIT 1;
    "'
    
    # Начислить билет (замените ORDER_ID)
-   ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+   ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
    INSERT INTO ticket_ledger (id, contest_id, referrer_id, referred_id, order_id, delta, reason, created_at)
    VALUES (
      '\''ticket_ORDER_ID_'\'' || strftime('\''%s'\'', '\''now'\'') || '\''000'\'',
@@ -176,7 +176,7 @@ WHERE referrer_id = 782245481
 
 1. **Проверить логи API:**
    ```bash
-   ssh root@72.56.93.135 "journalctl -u outlivion-api.service -n 100 | grep webhook"
+   ssh root@72.56.93.135 "journalctl -u vpn-core.service -n 100 | grep webhook"
    ```
 
 2. **Если webhook не пришел:**
@@ -209,7 +209,7 @@ WHERE referrer_id = 782245481
 |-----------|--------|
 | Бот работает | ✅ Да (PID: 759042) |
 | Polling включен | ✅ Да (`TELEGRAM_USE_POLLING=1`) |
-| API работает | ✅ Да (outlivion-api активен) |
+| API работает | ✅ Да (vpn-core активен) |
 | YooKassa webhook URL | ✅ Да (`api.outlivion.space/v1/payments/webhook`) |
 | YooKassa события | ✅ Да (`payment.succeeded`) |
 | Билеты в БД | ✅ 16 |

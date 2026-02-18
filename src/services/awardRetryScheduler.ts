@@ -26,7 +26,7 @@ class AwardRetryScheduler {
       orderCreatedAt: string
     ) => Promise<boolean>
   ) {
-    this.botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+    this.botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
     
     // Создаем cron задачу: каждые 5 минут
     this.retryTask = cron.schedule('*/5 * * * *', async () => {

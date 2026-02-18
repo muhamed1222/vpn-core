@@ -1,5 +1,5 @@
 {
-  "name": "outlivion-api",
+  "name": "vpn-core",
   "version": "1.0.0",
   "description": "Outlivion API server",
   "main": "dist/server.js",

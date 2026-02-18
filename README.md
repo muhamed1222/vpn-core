@@ -1,4 +1,4 @@
-# 🚀 Outlivion VPN API
+# 🚀 vpn-web API
 
 Backend API для VPN сервиса Outlivion с интеграцией Telegram бота, платежных систем и конкурсной механики.
 
@@ -13,7 +13,7 @@ Backend API для VPN сервиса Outlivion с интеграцией Telegr
 - [`03-flows/`](../docs/03-flows/) - потоки данных и процессы
 - [`04-apis/`](../docs/04-apis/) - API спецификации
 
-### 📁 Локальная документация (специфика vpn_api):
+### 📁 Локальная документация (специфика vpn-core):
 
 1. **[CONTEST_API.md](./CONTEST_API.md)**  
    API для конкурсной системы
@@ -87,7 +87,7 @@ PORT=3001
 NODE_ENV=production
 
 # Database
-BOT_DATABASE_PATH=/root/vpn_bot/data/database.sqlite
+BOT_DATABASE_PATH=/root/vpn-bot/data/database.sqlite
 
 # YooKassa
 YOOKASSA_SHOP_ID=your_shop_id
@@ -186,7 +186,7 @@ npm start
 
 ## 📞 Контакты
 
-- **Telegram Bot:** @OutlivionVPN_bot
+- **Telegram Bot:** @vpn-web_bot
 - **Website:** https://my.outlivion.space
 - **VPN Domain:** https://vpn.outlivion.space
 

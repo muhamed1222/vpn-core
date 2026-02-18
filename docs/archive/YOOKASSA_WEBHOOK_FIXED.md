@@ -115,7 +115,7 @@ Telegram Bot API (polling)
 
 **Как проверить логи:**
 ```bash
-ssh root@72.56.93.135 "journalctl -u outlivion-api.service -f | grep -E 'webhook|payment|ticket|award'"
+ssh root@72.56.93.135 "journalctl -u vpn-core.service -f | grep -E 'webhook|payment|ticket|award'"
 ```
 
 ---
@@ -134,7 +134,7 @@ ssh root@72.56.93.135 "journalctl -u outlivion-api.service -f | grep -E 'webhook
 
 **Как проверить логи:**
 ```bash
-ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep TELEGRAM_PAYMENT"
+ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log | grep TELEGRAM_PAYMENT"
 ```
 
 ---
@@ -175,10 +175,10 @@ ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep TELEGRAM_PAYMENT"
 
 | Файл | Изменение | Описание |
 |------|-----------|----------|
-| `/root/vpn_bot/.env` | `TELEGRAM_USE_POLLING=1` | Включен polling для бота |
-| `/root/vpn_bot/server.ts` | Добавлен DEBUG лог | Диагностика режима |
-| `/root/vpn_bot/src/bot/index.ts` | Логи в `successful_payment` | Диагностика Telegram Payments |
-| `/root/vpn_bot/src/services/orderProcessingService.ts` | Логи в `activateOrder` | Общая диагностика |
+| `/root/vpn-bot/.env` | `TELEGRAM_USE_POLLING=1` | Включен polling для бота |
+| `/root/vpn-bot/server.ts` | Добавлен DEBUG лог | Диагностика режима |
+| `/root/vpn-bot/src/bot/index.ts` | Логи в `successful_payment` | Диагностика Telegram Payments |
+| `/root/vpn-bot/src/services/orderProcessingService.ts` | Логи в `activateOrder` | Общая диагностика |
 | **YooKassa кабинет** | **URL webhook изменен** | **Исправлена критическая ошибка** |
 
 ---
@@ -216,7 +216,7 @@ ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep TELEGRAM_PAYMENT"
 
 ### Способ 2: Через SQL
 ```bash
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT SUM(delta) as total_tickets 
 FROM ticket_ledger 
 WHERE referrer_id = 782245481 
@@ -235,17 +235,17 @@ WHERE referrer_id = 782245481
 
 **1. Проверить логи API:**
 ```bash
-ssh root@72.56.93.135 "journalctl -u outlivion-api.service -n 100 | grep -E 'webhook|payment'"
+ssh root@72.56.93.135 "journalctl -u vpn-core.service -n 100 | grep -E 'webhook|payment'"
 ```
 
 **Если логов нет:**
 - Проверьте URL в YooKassa кабинете еще раз
 - Убедитесь, что `payment.succeeded` включен
-- Проверьте, что API сервер работает: `systemctl status outlivion-api.service`
+- Проверьте, что API сервер работает: `systemctl status vpn-core.service`
 
 **2. Проверить последний заказ:**
 ```bash
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT id, status, datetime(created_at/1000, '\''unixepoch'\'')
 FROM orders 
 WHERE user_id = 782245481 
@@ -257,7 +257,7 @@ LIMIT 1;
 **3. Начислить билет вручную (если webhook не сработал):**
 ```bash
 # Замените ORDER_ID на ID заказа из шага 2
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 INSERT INTO ticket_ledger (id, contest_id, referrer_id, referred_id, order_id, delta, reason, created_at)
 VALUES (
   '\''ticket_ORDER_ID_'\'' || strftime('\''%s'\'', '\''now'\'') || '\''000'\'',
@@ -278,11 +278,11 @@ VALUES (
 
 **1. Проверить логи бота:**
 ```bash
-ssh root@72.56.93.135 "tail -100 /root/vpn_bot/bot.log | grep TELEGRAM_PAYMENT"
+ssh root@72.56.93.135 "tail -100 /root/vpn-bot/bot.log | grep TELEGRAM_PAYMENT"
 ```
 
 **Если логов нет:**
-- Проверьте, что Polling включен: `grep TELEGRAM_USE_POLLING /root/vpn_bot/.env`
+- Проверьте, что Polling включен: `grep TELEGRAM_USE_POLLING /root/vpn-bot/.env`
 - Перезапустите бота: `systemctl restart vpn-bot`
 - Проверьте статус: `systemctl status vpn-bot`
 

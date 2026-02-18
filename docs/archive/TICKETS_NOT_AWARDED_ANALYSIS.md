@@ -46,7 +46,7 @@ ticket_ord_5903a2e6... | 02:08:01 | SELF_PURCHASE
 ### 4. Статус бота
 
 ```bash
-● vpn-bot.service - VPN Bot Service
+● vpn-bot.service - vpn-bot Service
      Active: active (running) since Sun 2026-01-18 03:12:01 UTC
 ```
 
@@ -55,7 +55,7 @@ ticket_ord_5903a2e6... | 02:08:01 | SELF_PURCHASE
 
 ---
 
-### 5. Логи API (outlivion-api)
+### 5. Логи API (vpn-core)
 
 **Запросы за последние 2 часа:**
 - ✅ API работает нормально
@@ -76,7 +76,7 @@ ticket_ord_5903a2e6... | 02:08:01 | SELF_PURCHASE
 
 **Код начисления существует:**
 ```typescript
-// /root/vpn_bot/src/services/orderProcessingService.ts
+// /root/vpn-bot/src/services/orderProcessingService.ts
 const ticketAwarded = ContestService.awardSelfPurchaseTicket(
     activeContest.id,
     order.userId,
@@ -115,8 +115,8 @@ if (ticketAwarded) {
 cat /etc/systemd/system/vpn-bot.service
 
 # Проверить логи в файле
-ls -la /root/vpn_bot/logs/
-cat /root/vpn_bot/logs/*.log 2>/dev/null | tail -100
+ls -la /root/vpn-bot/logs/
+cat /root/vpn-bot/logs/*.log 2>/dev/null | tail -100
 ```
 
 ---
@@ -131,10 +131,10 @@ cat /root/vpn_bot/logs/*.log 2>/dev/null | tail -100
 **Проверить:**
 ```bash
 # Проверить актуальный код
-cat /root/vpn_bot/src/services/orderProcessingService.ts | grep -B 5 -A 15 "awardSelfPurchaseTicket"
+cat /root/vpn-bot/src/services/orderProcessingService.ts | grep -B 5 -A 15 "awardSelfPurchaseTicket"
 
 # Проверить, компилируется ли код правильно
-cat /root/vpn_bot/dist/*.js | grep "awardSelfPurchaseTicket"
+cat /root/vpn-bot/dist/*.js | grep "awardSelfPurchaseTicket"
 ```
 
 ---
@@ -149,8 +149,8 @@ cat /root/vpn_bot/dist/*.js | grep "awardSelfPurchaseTicket"
 **Проверить:**
 ```bash
 # Найти все места, где orders обновляются
-grep -r "UPDATE orders" /root/vpn_bot/src --include="*.ts"
-grep -r "status.*COMPLETED" /root/vpn_bot/src --include="*.ts"
+grep -r "UPDATE orders" /root/vpn-bot/src --include="*.ts"
+grep -r "status.*COMPLETED" /root/vpn-bot/src --include="*.ts"
 ```
 
 ---
@@ -163,7 +163,7 @@ grep -r "status.*COMPLETED" /root/vpn_bot/src --include="*.ts"
 ssh root@72.56.93.135
 
 # Запустить скрипт ручного начисления для 3 заказов
-node /opt/outlivion-api/scripts/manual-award-tickets.js \
+node /opt/vpn-core/scripts/manual-award-tickets.js \
   ord_1c186eab-f535-45e4-893c-a522a272fccc \
   ord_b9cf0b5b-a325-4495-a7c8-1c1fad0a89d1 \
   ord_63d529be-7d0d-4059-bae3-012573f8965b
@@ -184,7 +184,7 @@ Total: 3 tickets awarded
 #### Шаг 1: Включить подробное логирование в боте
 
 ```typescript
-// /root/vpn_bot/src/services/orderProcessingService.ts
+// /root/vpn-bot/src/services/orderProcessingService.ts
 
 export async function processPayment(order: Order): Promise<void> {
     console.log(`[OrderProcessing] 🚀 STARTED processing payment for order ${order.id}`);
@@ -222,7 +222,7 @@ export async function processPayment(order: Order): Promise<void> {
 #### Шаг 2: Перекомпилировать и перезапустить бота
 
 ```bash
-cd /root/vpn_bot
+cd /root/vpn-bot
 npm run build
 systemctl restart vpn-bot
 journalctl -u vpn-bot -f
@@ -237,7 +237,7 @@ journalctl -u vpn-bot -f
    ```
 3. Проверить начисление:
    ```bash
-   sqlite3 /root/vpn_bot/data/database.sqlite \
+   sqlite3 /root/vpn-bot/data/database.sqlite \
      "SELECT * FROM ticket_ledger ORDER BY created_at DESC LIMIT 5;"
    ```
 

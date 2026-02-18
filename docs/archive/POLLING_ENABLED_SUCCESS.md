@@ -9,7 +9,7 @@
 
 ### 1. ✅ Включен Polling режим
 
-**Изменено:** `/root/vpn_bot/.env`
+**Изменено:** `/root/vpn-bot/.env`
 
 ```bash
 # Было:
@@ -50,7 +50,7 @@ console.log("[TELEGRAM_PAYMENT] ✅ processPayment completed successfully for or
 
 **Статус сервиса:**
 ```
-● vpn-bot.service - VPN Bot Service
+● vpn-bot.service - vpn-bot Service
      Active: active (running)
      Tasks: 28
      Memory: 83.5M
@@ -80,7 +80,7 @@ console.log("[TELEGRAM_PAYMENT] ✅ processPayment completed successfully for or
 
 ## Что произойдет при покупке?
 
-### Ожидаемые логи в `/root/vpn_bot/bot.log`:
+### Ожидаемые логи в `/root/vpn-bot/bot.log`:
 
 ```
 [TELEGRAM_PAYMENT] 🚀 Received successful_payment event: { userId: 782245481, paymentChargeId: 'xxx' }
@@ -106,12 +106,12 @@ console.log("[TELEGRAM_PAYMENT] ✅ processPayment completed successfully for or
 ### 1. Открыть мониторинг логов
 
 ```bash
-ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log"
+ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log"
 ```
 
 **Или через одну команду:**
 ```bash
-ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep --line-buffered -E 'TELEGRAM_PAYMENT|OrderProcessing|ticket|award'"
+ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log | grep --line-buffered -E 'TELEGRAM_PAYMENT|OrderProcessing|ticket|award'"
 ```
 
 ---
@@ -135,7 +135,7 @@ ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep --line-buffered -E '
 ### Способ 1: Через SQL
 
 ```bash
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT 
   id,
   order_id,
@@ -154,7 +154,7 @@ LIMIT 5;
 ### Способ 2: Посчитать общее количество
 
 ```bash
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT SUM(delta) as total_tickets 
 FROM ticket_ledger 
 WHERE referrer_id = 782245481 
@@ -187,7 +187,7 @@ ssh root@72.56.93.135 "systemctl status vpn-bot"
 
 **2. Проверить, читает ли бот .env:**
 ```bash
-ssh root@72.56.93.135 "grep 'DEBUG.*TELEGRAM_USE_POLLING' /root/vpn_bot/bot.log | tail -1"
+ssh root@72.56.93.135 "grep 'DEBUG.*TELEGRAM_USE_POLLING' /root/vpn-bot/bot.log | tail -1"
 ```
 
 **Должно быть:**
@@ -210,10 +210,10 @@ ssh root@72.56.93.135 "journalctl -u vpn-bot -n 50"
 
 | Файл | Изменение | Backup |
 |------|-----------|--------|
-| `/root/vpn_bot/.env` | `TELEGRAM_USE_POLLING=1` разкомментирован | (нет) |
-| `/root/vpn_bot/server.ts` | Добавлен DEBUG лог (строка 25) | (можно удалить после проверки) |
-| `/root/vpn_bot/src/bot/index.ts` | Добавлены логи в `successful_payment` | `.backup` |
-| `/root/vpn_bot/src/services/orderProcessingService.ts` | Добавлены логи в `activateOrder` | `.backup` |
+| `/root/vpn-bot/.env` | `TELEGRAM_USE_POLLING=1` разкомментирован | (нет) |
+| `/root/vpn-bot/server.ts` | Добавлен DEBUG лог (строка 25) | (можно удалить после проверки) |
+| `/root/vpn-bot/src/bot/index.ts` | Добавлены логи в `successful_payment` | `.backup` |
+| `/root/vpn-bot/src/services/orderProcessingService.ts` | Добавлены логи в `activateOrder` | `.backup` |
 
 ---
 
@@ -245,7 +245,7 @@ ssh root@72.56.93.135 "journalctl -u vpn-bot -n 50"
 
 - **Сохранить полные логи:**
   ```bash
-  ssh root@72.56.93.135 "cat /root/vpn_bot/bot.log" > full_bot_logs.txt
+  ssh root@72.56.93.135 "cat /root/vpn-bot/bot.log" > full_bot_logs.txt
   ```
 - **Проверить Telegram Bot API:**
   ```bash

@@ -154,7 +154,7 @@ if (priorPayments && priorPayments.count > 0) {
 **Код (строки 119-140):**
 ```typescript
 // Начисляем билеты рефереру, если применимо
-const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
 if (fs.existsSync(botDbPath)) {
   try {
     const orderCreatedAt = orderRow.created_at || new Date().toISOString();

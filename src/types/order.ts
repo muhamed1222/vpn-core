@@ -10,6 +10,7 @@ export interface Order {
 export interface CreateOrderRequest {
   planId: string;
   tgId?: number; // Для создания заказа от имени админа (бота)
+  returnUrlBase?: string; // Для редиректа пользователя после оплаты (?orderId добавляется сервером)
   // userRef больше не принимается из body, берется из авторизованного пользователя
 }
 
@@ -30,4 +31,3 @@ export interface WebhookEvent {
   orderId?: string;
   [key: string]: unknown;
 }
-

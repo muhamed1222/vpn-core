@@ -107,7 +107,7 @@ this.retryTask = cron.schedule('*/5 * * * *', async () => {
 - Билеты начисляются в боте, но с другой логикой/таймингом
 
 **Решение:**
-- Проверить логи бота: `/root/vpn_bot/logs/` или через `journalctl`
+- Проверить логи бота: `/root/vpn-bot/logs/` или через `journalctl`
 - Убедиться, что `OrderProcessingService.activateOrder()` вызывается
 
 #### 2. Заказ уже имеет статус `COMPLETED`
@@ -144,7 +144,7 @@ if (!contest) {
 
 **Проверка:**
 ```bash
-ssh root@72.56.93.135 "sqlite3 /root/vpn_bot/data/database.sqlite 'SELECT id, title, is_active FROM contests;'"
+ssh root@72.56.93.135 "sqlite3 /root/vpn-bot/data/database.sqlite 'SELECT id, title, is_active FROM contests;'"
 ```
 
 #### 4. Заказ вне периода конкурса
@@ -221,7 +221,7 @@ T+5min:  ✅ БИЛЕТЫ НАЧИСЛЕНЫ (при успехе)
 
 ### 1. Проверить логи API
 ```bash
-ssh root@72.56.93.135 "journalctl -u outlivion-api --since '10 minutes ago' --no-pager | grep -i 'award\|ticket'"
+ssh root@72.56.93.135 "journalctl -u vpn-core --since '10 minutes ago' --no-pager | grep -i 'award\|ticket'"
 ```
 
 **Что искать:**
@@ -231,7 +231,7 @@ ssh root@72.56.93.135 "journalctl -u outlivion-api --since '10 minutes ago' --no
 
 ### 2. Проверить логи бота
 ```bash
-ssh root@72.56.93.135 "journalctl --since '10 minutes ago' --no-pager | grep 'vpn_bot\|ContestService\|awardTickets'"
+ssh root@72.56.93.135 "journalctl --since '10 minutes ago' --no-pager | grep 'vpn-bot\|ContestService\|awardTickets'"
 ```
 
 ### 3. Проверить очередь повторов
@@ -253,7 +253,7 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ### 4. Проверить базу данных напрямую
 ```bash
-ssh root@72.56.93.135 "sqlite3 /root/vpn_bot/data/database.sqlite 'SELECT * FROM ticket_ledger WHERE order_id=\"YOUR_ORDER_ID\";'"
+ssh root@72.56.93.135 "sqlite3 /root/vpn-bot/data/database.sqlite 'SELECT * FROM ticket_ledger WHERE order_id=\"YOUR_ORDER_ID\";'"
 ```
 
 ---
@@ -300,7 +300,7 @@ ssh root@72.56.93.135 "sqlite3 /root/vpn_bot/data/database.sqlite 'SELECT * FROM
 
 1. **Проверьте логи API:**
    ```bash
-   journalctl -u outlivion-api -n 100 | grep -i 'award\|ticket'
+   journalctl -u vpn-core -n 100 | grep -i 'award\|ticket'
    ```
 
 2. **Проверьте логи бота:**

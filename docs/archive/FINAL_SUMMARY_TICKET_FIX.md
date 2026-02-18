@@ -52,12 +52,12 @@
 - Обработчик `successful_payment` никогда не вызывался
 
 #### Решение:
-1. Включен **POLLING режим** в `/root/vpn_bot/.env`:
+1. Включен **POLLING режим** в `/root/vpn-bot/.env`:
    ```bash
    TELEGRAM_USE_POLLING=1
    ```
 
-2. Добавлено диагностическое логирование в `/root/vpn_bot/src/bot/index.ts`:
+2. Добавлено диагностическое логирование в `/root/vpn-bot/src/bot/index.ts`:
    ```typescript
    bot.on('successful_payment', async (ctx) => {
        console.log('[TELEGRAM_PAYMENT] 🚀 Received successful_payment event:', ...);
@@ -68,7 +68,7 @@
    });
    ```
 
-3. Добавлено логирование в `/root/vpn_bot/server.ts`:
+3. Добавлено логирование в `/root/vpn-bot/server.ts`:
    ```typescript
    console.log("[DEBUG] TELEGRAM_USE_POLLING =", process.env.TELEGRAM_USE_POLLING, ...);
    ```
@@ -123,7 +123,7 @@
 | YooKassa Webhook | ❌ Не настроен | Требует конфигурации в YooKassa |
 | Ручное начисление | ✅ Работает | 16 билетов начислено |
 | База данных | ✅ Работает | Все заказы в БД |
-| API сервер | ✅ Работает | outlivion-api активен |
+| API сервер | ✅ Работает | vpn-core активен |
 | Contest система | ✅ Работает | Конкурс активен |
 
 ---
@@ -132,10 +132,10 @@
 
 | Файл | Изменение | Backup |
 |------|-----------|--------|
-| `/root/vpn_bot/.env` | `TELEGRAM_USE_POLLING=1` | (нет) |
-| `/root/vpn_bot/server.ts` | Добавлен DEBUG лог (строка 25) | (можно удалить) |
-| `/root/vpn_bot/src/bot/index.ts` | Добавлены логи в `successful_payment` | `.backup` |
-| `/root/vpn_bot/src/services/orderProcessingService.ts` | Добавлены логи в `activateOrder` | `.backup` |
+| `/root/vpn-bot/.env` | `TELEGRAM_USE_POLLING=1` | (нет) |
+| `/root/vpn-bot/server.ts` | Добавлен DEBUG лог (строка 25) | (можно удалить) |
+| `/root/vpn-bot/src/bot/index.ts` | Добавлены логи в `successful_payment` | `.backup` |
+| `/root/vpn-bot/src/services/orderProcessingService.ts` | Добавлены логи в `activateOrder` | `.backup` |
 
 ---
 
@@ -155,7 +155,7 @@
 
 **Как проверить логи:**
 ```bash
-ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep --line-buffered TELEGRAM_PAYMENT"
+ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log | grep --line-buffered TELEGRAM_PAYMENT"
 ```
 
 ---
@@ -186,7 +186,7 @@ ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep --line-buffered TELE
 
 ### Способ 2: Через SQL
 ```bash
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT SUM(delta) as total_tickets 
 FROM ticket_ledger 
 WHERE referrer_id = 782245481 
@@ -204,13 +204,13 @@ WHERE referrer_id = 782245481
 
 **1. Проверить, что Polling включен:**
 ```bash
-ssh root@72.56.93.135 "grep 'DEBUG.*TELEGRAM_USE_POLLING' /root/vpn_bot/bot.log | tail -1"
+ssh root@72.56.93.135 "grep 'DEBUG.*TELEGRAM_USE_POLLING' /root/vpn-bot/bot.log | tail -1"
 ```
 Должно быть: `[DEBUG] TELEGRAM_USE_POLLING = 1 | usePolling = true`
 
 **2. Проверить логи при покупке:**
 ```bash
-ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log"
+ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log"
 ```
 Должны появиться строки с `[TELEGRAM_PAYMENT]`
 
@@ -238,14 +238,14 @@ curl -X POST https://api.outlivion.space/v1/payments/webhook \
 
 **3. Проверить логи API:**
 ```bash
-ssh root@72.56.93.135 "journalctl -u outlivion-api.service -f"
+ssh root@72.56.93.135 "journalctl -u vpn-core.service -f"
 ```
 После оплаты через YooKassa должны появиться логи webhook
 
 **4. Временное решение - ручное начисление:**
 ```bash
 # Найти заказы без билетов
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT o.id, o.user_id, datetime(o.created_at/1000, '\''unixepoch'\'')
 FROM orders o
 LEFT JOIN ticket_ledger t ON t.order_id = o.id
@@ -257,7 +257,7 @@ LIMIT 5;
 "'
 
 # Начислить билет вручную (замените ORDER_ID и USER_ID)
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 INSERT INTO ticket_ledger (id, contest_id, referrer_id, referred_id, order_id, delta, reason, created_at)
 VALUES (
   '\''ticket_ORDER_ID_'\'' || strftime('\''%s'\'', '\''now'\'') || '\''000'\'',

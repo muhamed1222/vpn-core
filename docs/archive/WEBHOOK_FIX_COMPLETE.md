@@ -32,7 +32,7 @@ Webhook: YooKassa ──> API ──> Обработка
 
 ## ✅ РЕШЕНИЕ ПРИМЕНЕНО
 
-### Файл: `/root/vpn_api/src/routes/v1/payments.ts`
+### Файл: `/root/vpn-core/src/routes/v1/payments.ts`
 
 **ДО:**
 ```typescript
@@ -48,7 +48,7 @@ let orderRow = ordersRepo.getOrder(orderId);
 if (!orderRow) {
   const { getDatabase } = await import('../../storage/db.js');
   const db = getDatabase();
-  const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+  const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
   
   if (fs.existsSync(botDbPath)) {
     try {
@@ -88,7 +88,7 @@ if (!orderRow) {
 
 ### 1. **Создана резервная копия**
 ```bash
-/root/vpn_api/src/routes/v1/payments.ts.backup_[timestamp]
+/root/vpn-core/src/routes/v1/payments.ts.backup_[timestamp]
 ```
 
 ### 2. **Применено исправление**
@@ -98,7 +98,7 @@ if (!orderRow) {
 
 ### 3. **API перезапущен**
 ```bash
-systemctl restart outlivion-api
+systemctl restart vpn-core
 ```
 
 **Статус:** ✅ active (running)  
@@ -123,8 +123,8 @@ API получает event: payment.succeeded
 Извлекает orderId из metadata
     ↓
 Ищет заказ:
-  1. Сначала в своей базе (/root/vpn_api/data/db.sqlite)
-  2. Если не найден → в базе бота (/root/vpn_bot/data/database.sqlite) ✅ НОВОЕ!
+  1. Сначала в своей базе (/root/vpn-core/data/db.sqlite)
+  2. Если не найден → в базе бота (/root/vpn-bot/data/database.sqlite) ✅ НОВОЕ!
     ↓
 Находит заказ в базе бота
     ↓
@@ -157,7 +157,7 @@ API получает event: payment.succeeded
 
 ```bash
 # Логи API (webhook обработка)
-journalctl -u outlivion-api -f | grep -E 'Webhook|bot database'
+journalctl -u vpn-core -f | grep -E 'Webhook|bot database'
 
 # Ожидаемый лог после успешного webhook:
 # [Webhook] Order found in bot database
@@ -215,21 +215,21 @@ https://api.outlivion.space/v1/payments/webhook
 ### 1. Telegram Stars (XTR) платежи
 - **Проблема:** `total_amount / 100` → неправильно для XTR
 - **Решение:** Убрано деление на 100
-- **Файл:** `/root/vpn_bot/src/bot/index.ts` (строка 1028)
+- **Файл:** `/root/vpn-bot/src/bot/index.ts` (строка 1028)
 - **Статус:** ✅ Исправлено
 
 ### 2. Кнопка "🔑 Показать VPN ключ"
 - **Проблема:** Ключ не отображался в профиле
 - **Решение:** Добавлена кнопка в профиль
 - **Файлы:** 
-  - `/root/vpn_bot/src/bot/subscription.ts`
-  - `/root/vpn_bot/src/bot/index.ts` (обработчик `show_vpn_key`)
+  - `/root/vpn-bot/src/bot/subscription.ts`
+  - `/root/vpn-bot/src/bot/index.ts` (обработчик `show_vpn_key`)
 - **Статус:** ✅ Добавлено
 
 ### 3. Polling режим для бота
 - **Проблема:** В webhook режиме события не доходили
 - **Решение:** Включен polling режим
-- **Файл:** `/root/vpn_bot/.env` (`TELEGRAM_USE_POLLING=1`)
+- **Файл:** `/root/vpn-bot/.env` (`TELEGRAM_USE_POLLING=1`)
 - **Статус:** ✅ Включено
 
 ---
@@ -239,9 +239,9 @@ https://api.outlivion.space/v1/payments/webhook
 Созданы резервные копии всех измененных файлов:
 
 ```bash
-/root/vpn_api/src/routes/v1/payments.ts.backup_[timestamp]
-/root/vpn_bot/src/bot/index.ts.backup_[timestamp]
-/root/vpn_bot/src/bot/subscription.ts.backup_[timestamp]
+/root/vpn-core/src/routes/v1/payments.ts.backup_[timestamp]
+/root/vpn-bot/src/bot/index.ts.backup_[timestamp]
+/root/vpn-bot/src/bot/subscription.ts.backup_[timestamp]
 ```
 
 ---
@@ -253,7 +253,7 @@ https://api.outlivion.space/v1/payments/webhook
    - Убедиться что всё работает автоматически
 
 2. ✅ **Мониторинг**
-   - Следить за логами API: `journalctl -u outlivion-api -f`
+   - Следить за логами API: `journalctl -u vpn-core -f`
    - Проверять webhook обработку
 
 3. ✅ **Документация**

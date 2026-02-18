@@ -37,10 +37,10 @@
 ```
 
 ### 4. Systemd сервис
-**Файл:** `deploy/systemd/outlivion-api.service`
+**Файл:** `deploy/systemd/vpn-core.service`
 
 ```typescript
-✅ EnvironmentFile=/opt/outlivion-api/.env
+✅ EnvironmentFile=/opt/vpn-core/.env
 ✅ Restart=always
 ✅ Правильный WorkingDirectory
 ```
@@ -56,30 +56,30 @@
 **Проверка:**
 ```bash
 # На сервере
-cd /opt/outlivion-api
+cd /opt/vpn-core
 cat .env | grep BOT_DATABASE_PATH
 ```
 
 **Должно быть:**
 ```env
-BOT_DATABASE_PATH=/path/to/vpn_bot/data/database.sqlite
+BOT_DATABASE_PATH=/path/to/vpn-bot/data/database.sqlite
 ```
 
 **Пример правильного пути:**
 ```env
-BOT_DATABASE_PATH=/root/vpn_bot/data/database.sqlite
+BOT_DATABASE_PATH=/root/vpn-bot/data/database.sqlite
 # или
-BOT_DATABASE_PATH=/opt/vpn_bot/data/database.sqlite
+BOT_DATABASE_PATH=/opt/vpn-bot/data/database.sqlite
 ```
 
 **Если отсутствует:**
-1. Добавить в `/opt/outlivion-api/.env`:
+1. Добавить в `/opt/vpn-core/.env`:
    ```env
-   BOT_DATABASE_PATH=/root/vpn_bot/data/database.sqlite
+   BOT_DATABASE_PATH=/root/vpn-bot/data/database.sqlite
    ```
 2. Перезапустить сервис:
    ```bash
-   sudo systemctl restart outlivion-api
+   sudo systemctl restart vpn-core
    ```
 
 ---
@@ -89,9 +89,9 @@ BOT_DATABASE_PATH=/opt/vpn_bot/data/database.sqlite
 **Проверка:**
 ```bash
 # На сервере
-ls -la /root/vpn_bot/data/database.sqlite
+ls -la /root/vpn-bot/data/database.sqlite
 # или
-ls -la $(grep BOT_DATABASE_PATH /opt/outlivion-api/.env | cut -d'=' -f2)
+ls -la $(grep BOT_DATABASE_PATH /opt/vpn-core/.env | cut -d'=' -f2)
 ```
 
 **Должно быть:**
@@ -113,19 +113,19 @@ ls -la $(grep BOT_DATABASE_PATH /opt/outlivion-api/.env | cut -d'=' -f2)
 ```bash
 # На сервере
 # Узнать пользователя, от которого запускается API
-sudo systemctl show outlivion-api | grep User
+sudo systemctl show vpn-core | grep User
 
 # Проверить права
-sudo -u outlivion ls -la /root/vpn_bot/data/database.sqlite
+sudo -u outlivion ls -la /root/vpn-bot/data/database.sqlite
 ```
 
 **Если нет прав:**
 ```bash
 # Вариант 1: Изменить владельца
-sudo chown outlivion:outlivion /root/vpn_bot/data/database.sqlite
+sudo chown outlivion:outlivion /root/vpn-bot/data/database.sqlite
 
 # Вариант 2: Добавить права чтения для группы
-sudo chmod 644 /root/vpn_bot/data/database.sqlite
+sudo chmod 644 /root/vpn-bot/data/database.sqlite
 ```
 
 ---
@@ -135,7 +135,7 @@ sudo chmod 644 /root/vpn_bot/data/database.sqlite
 **Проверка:**
 ```bash
 # На сервере
-sqlite3 /root/vpn_bot/data/database.sqlite ".tables" | grep -E "(contests|ref_events|ticket_ledger)"
+sqlite3 /root/vpn-bot/data/database.sqlite ".tables" | grep -E "(contests|ref_events|ticket_ledger)"
 ```
 
 **Должны быть:**
@@ -146,7 +146,7 @@ sqlite3 /root/vpn_bot/data/database.sqlite ".tables" | grep -E "(contests|ref_ev
 **Если таблиц нет:**
 - Запустить скрипт создания конкурса:
   ```bash
-  cd /root/vpn_bot
+  cd /root/vpn-bot
   npx ts-node scripts/create_contest.ts
   ```
 
@@ -157,7 +157,7 @@ sqlite3 /root/vpn_bot/data/database.sqlite ".tables" | grep -E "(contests|ref_ev
 **Проверка:**
 ```bash
 # На сервере
-sqlite3 /root/vpn_bot/data/database.sqlite "SELECT id, title, is_active, starts_at, ends_at FROM contests WHERE is_active = 1;"
+sqlite3 /root/vpn-bot/data/database.sqlite "SELECT id, title, is_active, starts_at, ends_at FROM contests WHERE is_active = 1;"
 ```
 
 **Должен быть:**
@@ -167,7 +167,7 @@ sqlite3 /root/vpn_bot/data/database.sqlite "SELECT id, title, is_active, starts_
 **Если конкурса нет:**
 - Создать конкурс через скрипт:
   ```bash
-  cd /root/vpn_bot
+  cd /root/vpn-bot
   npx ts-node scripts/create_contest.ts \
     --id "contest-2026-01" \
     --title "🎉 Розыгрыш Outlivion — 10 призов!" \
@@ -185,7 +185,7 @@ sqlite3 /root/vpn_bot/data/database.sqlite "SELECT id, title, is_active, starts_
 **Проверка:**
 ```bash
 # На сервере
-sudo journalctl -u outlivion-api -n 100 --no-pager | grep -E "(Contest|Referral|BOT_DATABASE)"
+sudo journalctl -u vpn-core -n 100 --no-pager | grep -E "(Contest|Referral|BOT_DATABASE)"
 ```
 
 **Что искать:**
@@ -220,38 +220,38 @@ curl -X GET "http://localhost:3001/v1/contest/active" \
 
 - [ ] **Переменная `BOT_DATABASE_PATH` установлена в `.env`**
   ```bash
-  grep BOT_DATABASE_PATH /opt/outlivion-api/.env
+  grep BOT_DATABASE_PATH /opt/vpn-core/.env
   ```
 
 - [ ] **База данных бота существует по указанному пути**
   ```bash
-  ls -la $(grep BOT_DATABASE_PATH /opt/outlivion-api/.env | cut -d'=' -f2)
+  ls -la $(grep BOT_DATABASE_PATH /opt/vpn-core/.env | cut -d'=' -f2)
   ```
 
 - [ ] **API сервер имеет права на чтение базы данных**
   ```bash
-  sudo -u outlivion cat $(grep BOT_DATABASE_PATH /opt/outlivion-api/.env | cut -d'=' -f2) > /dev/null
+  sudo -u outlivion cat $(grep BOT_DATABASE_PATH /opt/vpn-core/.env | cut -d'=' -f2) > /dev/null
   ```
 
 - [ ] **Таблица `contests` существует в базе бота**
   ```bash
-  sqlite3 $(grep BOT_DATABASE_PATH /opt/outlivion-api/.env | cut -d'=' -f2) ".tables" | grep contests
+  sqlite3 $(grep BOT_DATABASE_PATH /opt/vpn-core/.env | cut -d'=' -f2) ".tables" | grep contests
   ```
 
 - [ ] **Есть активный конкурс в базе данных**
   ```bash
-  sqlite3 $(grep BOT_DATABASE_PATH /opt/outlivion-api/.env | cut -d'=' -f2) "SELECT COUNT(*) FROM contests WHERE is_active = 1;"
+  sqlite3 $(grep BOT_DATABASE_PATH /opt/vpn-core/.env | cut -d'=' -f2) "SELECT COUNT(*) FROM contests WHERE is_active = 1;"
   ```
 
 - [ ] **API сервер перезапущен после изменений**
   ```bash
-  sudo systemctl restart outlivion-api
-  sudo systemctl status outlivion-api
+  sudo systemctl restart vpn-core
+  sudo systemctl status vpn-core
   ```
 
 - [ ] **Роуты конкурса зарегистрированы (проверить логи)**
   ```bash
-  sudo journalctl -u outlivion-api -n 50 | grep -E "(Contest|Referral) routes registered"
+  sudo journalctl -u vpn-core -n 50 | grep -E "(Contest|Referral) routes registered"
   ```
 
 ---
@@ -265,10 +265,10 @@ curl -X GET "http://localhost:3001/v1/contest/active" \
 **Решение:**
 ```bash
 # Добавить в .env
-echo "BOT_DATABASE_PATH=/root/vpn_bot/data/database.sqlite" >> /opt/outlivion-api/.env
+echo "BOT_DATABASE_PATH=/root/vpn-bot/data/database.sqlite" >> /opt/vpn-core/.env
 
 # Перезапустить
-sudo systemctl restart outlivion-api
+sudo systemctl restart vpn-core
 ```
 
 ---
@@ -280,11 +280,11 @@ sudo systemctl restart outlivion-api
 **Решение:**
 ```bash
 # Создать конкурс
-cd /root/vpn_bot
+cd /root/vpn-bot
 npx ts-node scripts/create_contest.ts --active
 
 # Проверить
-sqlite3 /root/vpn_bot/data/database.sqlite "SELECT * FROM contests WHERE is_active = 1;"
+sqlite3 /root/vpn-bot/data/database.sqlite "SELECT * FROM contests WHERE is_active = 1;"
 ```
 
 ---
@@ -296,7 +296,7 @@ sqlite3 /root/vpn_bot/data/database.sqlite "SELECT * FROM contests WHERE is_acti
 **Решение:**
 ```bash
 # Проверить структуру базы
-sqlite3 /root/vpn_bot/data/database.sqlite ".schema contests"
+sqlite3 /root/vpn-bot/data/database.sqlite ".schema contests"
 
 # Если таблицы нет, перезапустить бота (он создаст таблицы)
 sudo systemctl restart vpn-bot
@@ -311,12 +311,12 @@ sudo systemctl restart vpn-bot
 **Решение:**
 ```bash
 # Узнать пользователя API
-sudo systemctl show outlivion-api | grep User
+sudo systemctl show vpn-core | grep User
 
 # Дать права
-sudo chmod 644 /root/vpn_bot/data/database.sqlite
+sudo chmod 644 /root/vpn-bot/data/database.sqlite
 # или
-sudo chown outlivion:outlivion /root/vpn_bot/data/database.sqlite
+sudo chown outlivion:outlivion /root/vpn-bot/data/database.sqlite
 ```
 
 ---
@@ -328,16 +328,16 @@ sudo chown outlivion:outlivion /root/vpn_bot/data/database.sqlite
 **Решение:**
 ```bash
 # Проверить логи
-sudo journalctl -u outlivion-api -n 100 | grep -i error
+sudo journalctl -u vpn-core -n 100 | grep -i error
 
 # Проверить, что файлы существуют
-ls -la /opt/outlivion-api/dist/routes/v1/contest.js
-ls -la /opt/outlivion-api/dist/routes/v1/referral.js
+ls -la /opt/vpn-core/dist/routes/v1/contest.js
+ls -la /opt/vpn-core/dist/routes/v1/referral.js
 
 # Пересобрать проект
-cd /opt/outlivion-api
+cd /opt/vpn-core
 npm run build
-sudo systemctl restart outlivion-api
+sudo systemctl restart vpn-core
 ```
 
 ---

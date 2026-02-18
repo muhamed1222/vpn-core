@@ -13,7 +13,7 @@
 ```
 ┌────────────────────────────────────────────────────────────────┐
 │ 1. НАЧИСЛЕНИЕ БИЛЕТОВ (Backend)                                │
-│    Файл: vpn_api/src/storage/contestUtils.ts                  │
+│    Файл: vpn-core/src/storage/contestUtils.ts                  │
 │    ↓                                                            │
 │    INSERT INTO ticket_ledger (...) ← Запись в SQLite БД        │
 │    Время: < 100ms                                              │
@@ -21,7 +21,7 @@
                                ↓
 ┌────────────────────────────────────────────────────────────────┐
 │ 2. ЗАПРОС С ФРОНТЕНДА (Vercel Next.js)                        │
-│    Файл: vpnwebsite/app/(auth)/contest/page.tsx               │
+│    Файл: vpn-tg-app/app/(auth)/contest/page.tsx               │
 │    ↓                                                            │
 │    fetch('/api/referral/tickets?contest_id=...')               │
 │    Время: зависит от кеша                                      │
@@ -29,15 +29,15 @@
                                ↓
 ┌────────────────────────────────────────────────────────────────┐
 │ 3. NEXT.JS API ROUTE (Vercel Edge)                            │
-│    Файл: vpnwebsite/app/api/referral/tickets/route.ts         │
+│    Файл: vpn-tg-app/app/api/referral/tickets/route.ts         │
 │    ↓                                                            │
 │    Проксирует на: https://my.outlivion.space/v1/referral/...  │
 │    Время: 10-50ms                                              │
 └────────────────────────────────────────────────────────────────┘
                                ↓
 ┌────────────────────────────────────────────────────────────────┐
-│ 4. BACKEND API (vpn_api)                                       │
-│    Файл: vpn_api/src/routes/v1/referral.ts                    │
+│ 4. BACKEND API (vpn-core)                                       │
+│    Файл: vpn-core/src/routes/v1/referral.ts                    │
 │    ↓                                                            │
 │    SELECT * FROM ticket_ledger WHERE tg_id = ... ← Чтение БД  │
 │    Время: 10-50ms                                              │
@@ -60,7 +60,7 @@
 
 ### ✅ Backend API (`/v1/referral/tickets`)
 
-**Файл:** `vpn_api/src/routes/v1/referral.ts` (строки 107-141)
+**Файл:** `vpn-core/src/routes/v1/referral.ts` (строки 107-141)
 
 ```typescript
 fastify.get('/tickets', { preHandler: verifyAuth }, async (request, reply) => {
@@ -81,7 +81,7 @@ fastify.get('/tickets', { preHandler: verifyAuth }, async (request, reply) => {
 
 ### ✅ Frontend API Route (`/api/referral/tickets`)
 
-**Файл:** `vpnwebsite/app/api/referral/tickets/route.ts` (строки 1-52)
+**Файл:** `vpn-tg-app/app/api/referral/tickets/route.ts` (строки 1-52)
 
 ```typescript
 export async function GET(request: NextRequest) {
@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
 
 ### ✅ Frontend Page (`/contest`)
 
-**Файл:** `vpnwebsite/app/(auth)/contest/page.tsx` (строки 1-390)
+**Файл:** `vpn-tg-app/app/(auth)/contest/page.tsx` (строки 1-390)
 
 ```typescript
 'use client'; // ← Client Component (рендерится на клиенте)
@@ -202,7 +202,7 @@ const ticketsResponse = await fetch(
 **Проверка:**
 ```bash
 # Проверить, используется ли SWR или React Query
-cd /Users/kelemetovmuhamed/Documents/Outlivion\ baza/vpnwebsite
+cd /Users/kelemetovmuhamed/Documents/Outlivion\ baza/vpn-tg-app
 grep -r "useSWR\|useQuery" app/ hooks/
 ```
 
@@ -214,7 +214,7 @@ grep -r "useSWR\|useQuery" app/ hooks/
 
 ### 1. Добавить запрет кеширования на уровне API
 
-**Файл:** `vpnwebsite/app/api/referral/tickets/route.ts`
+**Файл:** `vpn-tg-app/app/api/referral/tickets/route.ts`
 
 ```typescript
 export async function GET(request: NextRequest) {
@@ -282,7 +282,7 @@ export async function GET(request: NextRequest) {
 
 ### 2. Добавить `cache: 'no-store'` на фронтенде
 
-**Файл:** `vpnwebsite/app/(auth)/contest/page.tsx`
+**Файл:** `vpn-tg-app/app/(auth)/contest/page.tsx`
 
 ```typescript
 // Внутри loadContestData()
@@ -308,7 +308,7 @@ const [summaryResponse, friendsResponse, ticketsResponse] = await Promise.all([
 
 ### 3. Добавить динамический query параметр (альтернатива)
 
-**Файл:** `vpnwebsite/app/(auth)/contest/page.tsx`
+**Файл:** `vpn-tg-app/app/(auth)/contest/page.tsx`
 
 ```typescript
 // Добавить timestamp для предотвращения кеширования

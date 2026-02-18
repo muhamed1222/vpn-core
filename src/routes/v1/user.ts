@@ -5,11 +5,13 @@ export async function userRoutes(fastify: FastifyInstance) {
   const jwtSecret: string = fastify.authJwtSecret;
   const cookieName: string = fastify.authCookieName;
   const marzbanService = fastify.marzbanService;
+  const adminApiKey: string = fastify.adminApiKey;
 
   const verifyAuth = createVerifyAuth({
     jwtSecret,
     cookieName,
     botToken: fastify.telegramBotToken, // Добавляем botToken для поддержки initData
+    adminApiKey,
   });
 
   /**
@@ -18,17 +20,22 @@ export async function userRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/config', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-    
+
+    // Admin mode: allow reading config for an arbitrary tgId (service-to-service).
+    const tgIdParamRaw = (request.query as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
     // Теперь вся логика стабильности (БД + Marzban) внутри getUserConfig
-    const config = await marzbanService.getUserConfig(request.user.tgId);
-    
+    const config = await marzbanService.getUserConfig(targetTgId);
+
     if (!config) {
-      return reply.status(404).send({ 
-        error: 'Not Found', 
-        message: 'У вас еще нет активной подписки.' 
+      return reply.status(404).send({
+        error: 'Not Found',
+        message: 'У вас еще нет активной подписки.'
       });
     }
-    
+
     return reply.send({ ok: true, config });
   });
 
@@ -37,15 +44,28 @@ export async function userRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/status', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-    const status = await marzbanService.getUserStatus(request.user.tgId);
-    
+    const tgIdParamRaw = (request.query as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
+    if (!targetTgId) {
+      fastify.log.warn({ user: request.user }, '[UserStatus] Missing targetTgId');
+      return reply.status(400).send({ error: 'Missing Telegram ID' });
+    }
+
+    fastify.log.info({ targetTgId, requester: request.user.tgId }, '[UserStatus] Querying status from Marzban');
+
+    const status = await marzbanService.getUserStatus(targetTgId);
+
     const now = Math.floor(Date.now() / 1000);
-    const isActive = status && status.status === 'active' && 
-                     status.expire && status.expire > now;
-    
+    // Подписка активна если статус 'active' И (срок не установлен ИЛИ еще не вышел)
+    const isActive = status &&
+      status.status === 'active' &&
+      (!status.expire || status.expire === 0 || status.expire > now);
+
     return reply.send({
-      ok: isActive,
-      status: isActive ? 'active' : 'disabled',
+      ok: !!isActive,
+      status: isActive ? 'active' : (status?.status || 'disabled'),
       expiresAt: status?.expire ? status.expire * 1000 : null, // Конвертируем в миллисекунды
       usedTraffic: (status && typeof status.used_traffic === 'number') ? status.used_traffic : 0,
       dataLimit: (status && typeof status.data_limit === 'number') ? status.data_limit : 0,
@@ -57,22 +77,22 @@ export async function userRoutes(fastify: FastifyInstance) {
    */
   fastify.post('/regenerate', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-    
+
     // 1. Генерируем новый (Marzban + сохранение в vpn_keys БД)
     const config = await marzbanService.regenerateUser(request.user.tgId);
-    
+
     // 2. Также обновляем "замороженный" ключ в последнем оплаченном заказе (для совместимости)
     if (config) {
       const { getOrdersByUser, markPaidWithKey } = await import('../../storage/ordersRepo.js');
       const userRef = `tg_${request.user.tgId}`;
       const orders = getOrdersByUser(userRef);
       const lastPaidOrder = orders.find(o => o.status === 'paid');
-      
+
       if (lastPaidOrder) {
         markPaidWithKey({ orderId: lastPaidOrder.order_id, key: config });
       }
     }
-    
+
     return reply.send({ ok: true, config });
   });
 
@@ -80,7 +100,8 @@ export async function userRoutes(fastify: FastifyInstance) {
    * POST /v1/user/renew (Для админки бота и акций)
    */
   fastify.post<{ Body: { tgId: number; days: number } }>('/renew', { preHandler: verifyAuth }, async (request, reply) => {
-    // В будущем тут должна быть проверка на права админа
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    if (!request.user.isAdmin) return reply.status(403).send({ error: 'Forbidden' });
     const { tgId, days } = request.body;
     const success = await marzbanService.renewUser(tgId, days);
     return reply.send({ ok: success });
@@ -92,9 +113,9 @@ export async function userRoutes(fastify: FastifyInstance) {
    */
   fastify.get('/billing', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-    
+
     const status = await marzbanService.getUserStatus(request.user.tgId);
-    
+
     if (!status) {
       return reply.send({
         usedBytes: 0,
@@ -105,12 +126,12 @@ export async function userRoutes(fastify: FastifyInstance) {
         period: { start: null, end: null },
       });
     }
-    
+
     const usedBytes = status.used_traffic || 0;
     const dataLimit = status.data_limit || null;
     const expire = status.expire || null;
     const now = Math.floor(Date.now() / 1000);
-    
+
     let averagePerDayBytes = 0;
     if (expire && expire > now) {
       const daysActive = Math.ceil((expire - now) / 86400);
@@ -118,7 +139,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         averagePerDayBytes = Math.floor(usedBytes / daysActive);
       }
     }
-    
+
     return reply.send({
       usedBytes,
       limitBytes: dataLimit,
@@ -151,7 +172,7 @@ export async function userRoutes(fastify: FastifyInstance) {
 
     const { getReferralStats } = await import('../../storage/referralsRepo.js');
     const stats = getReferralStats(request.user.tgId, botDbPath);
-    
+
     return reply.send(stats);
   });
 }

@@ -14,7 +14,7 @@
 ## Причины
 
 ### 1. Логи бота НЕ писались в journalctl
-- Логи перенаправлены в файл `/root/vpn_bot/bot.log`
+- Логи перенаправлены в файл `/root/vpn-bot/bot.log`
 - `journalctl -u vpn-bot` был пустой
 - Из-за этого не было видно, что происходит
 
@@ -39,7 +39,7 @@
 
 ### Шаг 2: ✅ Добавлено подробное логирование
 
-**Изменения в `/root/vpn_bot/src/services/orderProcessingService.ts`:**
+**Изменения в `/root/vpn-bot/src/services/orderProcessingService.ts`:**
 
 1. **Добавлен лог при начале проверки конкурса (строка ~117):**
    ```typescript
@@ -97,7 +97,7 @@ systemctl restart vpn-bot
 
 ```bash
 # НЕ В journalctl!
-tail -f /root/vpn_bot/bot.log
+tail -f /root/vpn-bot/bot.log
 ```
 
 ### Ожидаемые логи при покупке:
@@ -134,10 +134,10 @@ tail -f /root/vpn_bot/bot.log
 
 ```bash
 # 1. Следить за логами в реальном времени
-tail -f /root/vpn_bot/bot.log
+tail -f /root/vpn-bot/bot.log
 
 # 2. После покупки проверить билеты в БД
-sqlite3 /root/vpn_bot/data/database.sqlite "
+sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT * FROM ticket_ledger 
 WHERE referrer_id = 782245481 
 ORDER BY created_at DESC 
@@ -145,7 +145,7 @@ LIMIT 5;
 "
 
 # 3. Проверить общее количество
-sqlite3 /root/vpn_bot/data/database.sqlite "
+sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT SUM(delta) as total_tickets 
 FROM ticket_ledger 
 WHERE referrer_id = 782245481 
@@ -172,8 +172,8 @@ WHERE referrer_id = 782245481
 
 | Файл | Изменение |
 |------|-----------|
-| `/root/vpn_bot/src/services/orderProcessingService.ts` | Добавлено подробное логирование |
-| `/root/vpn_bot/src/services/orderProcessingService.ts.backup` | Бэкап оригинального файла |
+| `/root/vpn-bot/src/services/orderProcessingService.ts` | Добавлено подробное логирование |
+| `/root/vpn-bot/src/services/orderProcessingService.ts.backup` | Бэкап оригинального файла |
 
 ---
 
@@ -183,12 +183,12 @@ WHERE referrer_id = 782245481
 
 **Конфигурация сервиса** (`/etc/systemd/system/vpn-bot.service`):
 ```ini
-StandardOutput=append:/root/vpn_bot/bot.log
-StandardError=append:/root/vpn_bot/bot.log
+StandardOutput=append:/root/vpn-bot/bot.log
+StandardError=append:/root/vpn-bot/bot.log
 ```
 
 **Это значит:**
-- Все `console.log()` → `/root/vpn_bot/bot.log`
+- Все `console.log()` → `/root/vpn-bot/bot.log`
 - НЕ в systemd journal
 - Нужно смотреть файл напрямую
 
@@ -200,12 +200,12 @@ StandardError=append:/root/vpn_bot/bot.log
 
 ### 1. Проверить логи бота:
 ```bash
-tail -100 /root/vpn_bot/bot.log | grep "OrderProcessing\|ticket\|contest"
+tail -100 /root/vpn-bot/bot.log | grep "OrderProcessing\|ticket\|contest"
 ```
 
 ### 2. Проверить активный конкурс:
 ```bash
-sqlite3 /root/vpn_bot/data/database.sqlite "
+sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT id, title, starts_at, ends_at 
 FROM contests 
 WHERE datetime(starts_at) <= datetime('now') 
@@ -215,7 +215,7 @@ WHERE datetime(starts_at) <= datetime('now')
 
 ### 3. Проверить заказы без билетов:
 ```bash
-sqlite3 /root/vpn_bot/data/database.sqlite "
+sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT o.id, o.user_id, o.plan_id, o.status, o.created_at
 FROM orders o
 LEFT JOIN ticket_ledger t ON t.order_id = o.id
@@ -230,7 +230,7 @@ LIMIT 10;
 ### 4. Начислить вручную:
 ```bash
 # Используйте ID заказа из шага 3
-sqlite3 /root/vpn_bot/data/database.sqlite "
+sqlite3 /root/vpn-bot/data/database.sqlite "
 INSERT INTO ticket_ledger (id, contest_id, referrer_id, referred_id, order_id, delta, reason, created_at)
 VALUES (
   'ticket_ORDER_ID_' || strftime('%s', 'now') || '000',
@@ -255,4 +255,4 @@ VALUES (
 - Бот перезапущен
 - Следующая покупка покажет, работает ли автоматика
 
-**Рекомендация:** Сделайте тестовую покупку и следите за `/root/vpn_bot/bot.log`
+**Рекомендация:** Сделайте тестовую покупку и следите за `/root/vpn-bot/bot.log`

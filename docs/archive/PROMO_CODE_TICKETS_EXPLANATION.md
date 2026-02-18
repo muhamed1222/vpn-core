@@ -218,10 +218,10 @@ console.log(`Awarded ${ticketsDelta} tickets for ${amount}₽`);
 
 ```bash
 # 1. Проверить заказ в базе
-ssh root@72.56.93.135 "sqlite3 /root/vpn_bot/data/database.sqlite 'SELECT id, plan_id, amount, status FROM orders WHERE id=\"ORDER_ID\";'"
+ssh root@72.56.93.135 "sqlite3 /root/vpn-bot/data/database.sqlite 'SELECT id, plan_id, amount, status FROM orders WHERE id=\"ORDER_ID\";'"
 
 # 2. Проверить билеты для этого заказа
-ssh root@72.56.93.135 "sqlite3 /root/vpn_bot/data/database.sqlite 'SELECT * FROM ticket_ledger WHERE order_id=\"ORDER_ID\";'"
+ssh root@72.56.93.135 "sqlite3 /root/vpn-bot/data/database.sqlite 'SELECT * FROM ticket_ledger WHERE order_id=\"ORDER_ID\";'"
 ```
 
 **Ожидаемый результат:**

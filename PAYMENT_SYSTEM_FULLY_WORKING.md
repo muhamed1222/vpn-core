@@ -43,7 +43,7 @@ Amount mismatch: expected 99, got 0.99
 **Причина:**  
 Telegram Stars (XTR) не требуют деления на 100, но код делил `total_amount / 100`.
 
-**Исправлено в файле:** `/root/vpn_bot/src/bot/index.ts`
+**Исправлено в файле:** `/root/vpn-bot/src/bot/index.ts`
 
 ```typescript
 // БЫЛО:
@@ -68,8 +68,8 @@ Error: Database not initialized
 `ContestService` не мог получить доступ к базе данных через `(DB as any).db`.
 
 **Исправлено в файлах:**
-1. `/root/vpn_bot/src/db/sqlite.ts` - добавлен метод `getDatabase()`
-2. `/root/vpn_bot/src/services/contestService.ts` - использует `DB.getDatabase()`
+1. `/root/vpn-bot/src/db/sqlite.ts` - добавлен метод `getDatabase()`
+2. `/root/vpn-bot/src/services/contestService.ts` - использует `DB.getDatabase()`
 
 ```typescript
 // БЫЛО:
@@ -95,7 +95,7 @@ function getDb(): Database.Database {
 Webhook искал `orderId`, но бот отправлял `order_id`.
 
 **Исправлено в файлах:**
-1. `/root/vpn_bot/src/services/yookassaService.ts`:
+1. `/root/vpn-bot/src/services/yookassaService.ts`:
 ```typescript
 // БЫЛО:
 metadata: { order_id: params.orderId } // ❌
@@ -104,7 +104,7 @@ metadata: { order_id: params.orderId } // ❌
 metadata: { orderId: params.orderId } // ✅
 ```
 
-2. `/root/vpn_bot/src/routes/webhooks.ts`:
+2. `/root/vpn-bot/src/routes/webhooks.ts`:
 ```typescript
 // БЫЛО:
 const orderId = payment.metadata?.order_id; // ❌
@@ -120,9 +120,9 @@ const orderId = payment.metadata?.orderId; // ✅
 ### 5. **Добавлена кнопка "Показать VPN ключ"**
 
 **Файлы:**
-1. `/root/vpn_bot/src/bot/subscription.ts` - добавлена кнопка
-2. `/root/vpn_bot/src/bot/index.ts` - добавлен обработчик `show_vpn_key`
-3. `/root/vpn_bot/src/bot/utils/navigation.ts` - добавлена навигация
+1. `/root/vpn-bot/src/bot/subscription.ts` - добавлена кнопка
+2. `/root/vpn-bot/src/bot/index.ts` - добавлен обработчик `show_vpn_key`
+3. `/root/vpn-bot/src/bot/utils/navigation.ts` - добавлена навигация
 
 **Результат:** Пользователь может легко просмотреть свой VPN ключ из профиля.
 
@@ -130,7 +130,7 @@ const orderId = payment.metadata?.orderId; // ✅
 
 ### 6. **Включен Polling режим**
 
-**Файл:** `/root/vpn_bot/.env`
+**Файл:** `/root/vpn-bot/.env`
 
 ```bash
 TELEGRAM_USE_POLLING=1
@@ -202,7 +202,7 @@ TELEGRAM_USE_POLLING=1
 
 ### Расположение:
 ```
-/root/vpn_bot/data/database.sqlite
+/root/vpn-bot/data/database.sqlite
 ```
 
 ### Ключевые таблицы:
@@ -217,7 +217,7 @@ TELEGRAM_USE_POLLING=1
 
 ### Сервисы:
 ```bash
-# VPN Bot
+# vpn-bot
 systemctl status vpn-bot
 systemctl restart vpn-bot
 journalctl -u vpn-bot -f
@@ -243,13 +243,13 @@ location /webhook/payment {
 ### Проверка логов бота:
 ```bash
 # Просмотр в реальном времени
-tail -f /root/vpn_bot/bot.log
+tail -f /root/vpn-bot/bot.log
 
 # Поиск ошибок
-grep -i error /root/vpn_bot/bot.log
+grep -i error /root/vpn-bot/bot.log
 
 # Webhook логи
-grep "YuKassa Webhook" /root/vpn_bot/bot.log
+grep "YuKassa Webhook" /root/vpn-bot/bot.log
 ```
 
 ### Ключевые события в логах:
@@ -320,7 +320,7 @@ grep "YuKassa Webhook" /root/vpn_bot/bot.log
 
 ## 📞 КОНТАКТЫ
 
-**Бот:** @OutlivionVPN_bot  
+**Бот:** @vpn-web_bot  
 **Сайт:** https://my.outlivion.space  
 **VPN Домен:** https://vpn.outlivion.space
 

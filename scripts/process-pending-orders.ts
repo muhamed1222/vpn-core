@@ -14,7 +14,7 @@ import * as fs from 'fs';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const BOT_DB_PATH = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+const BOT_DB_PATH = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
 const YOOKASSA_SHOP_ID = process.env.YOOKASSA_SHOP_ID;
 const YOOKASSA_SECRET_KEY = process.env.YOOKASSA_SECRET_KEY;
 

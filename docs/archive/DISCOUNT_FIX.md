@@ -6,14 +6,14 @@
 
 ## Решение
 
-Добавлена проверка скидки пользователя из базы данных бота в endpoint `/v1/orders/create` в `vpn_api`.
+Добавлена проверка скидки пользователя из базы данных бота в endpoint `/v1/orders/create` в `vpn-core`.
 
 ### Изменения
 
-**Файл:** `vpn_api/src/routes/v1/orders.ts`
+**Файл:** `vpn-core/src/routes/v1/orders.ts`
 
 1. **Проверка скидки из базы бота:**
-   - Подключается к базе данных бота (`/root/vpn_bot/data/database.sqlite`)
+   - Подключается к базе данных бота (`/root/vpn-bot/data/database.sqlite`)
    - Проверяется поле `discount_percent` пользователя
    - Проверяется срок действия скидки (`discount_expires_at`)
 
@@ -26,7 +26,7 @@
 
 ```typescript
 // Проверяем скидку пользователя из базы бота
-const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
 let discountPercent = 0;
 
 if (fs.existsSync(botDbPath)) {
@@ -64,7 +64,7 @@ if (discountPercent > 0 && discountPercent <= 100) {
 
 2. **Пользователь создает заказ через мини-приложение:**
    - Мини-приложение вызывает `/api/orders/create`
-   - `vpn_api` проверяет скидку в базе бота
+   - `vpn-core` проверяет скидку в базе бота
    - Если скидка активна, применяется к цене заказа
    - Создается платеж в YooKassa с учетом скидки
 

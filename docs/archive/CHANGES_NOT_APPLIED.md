@@ -241,21 +241,21 @@ fastify.get(
 ```bash
 # 1. Синхронизация файлов на сервер
 rsync -avz --exclude 'node_modules' --exclude '.git' \
-  /Users/kelemetovmuhamed/Documents/Outlivion\ baza/vpn_api/ \
-  root@72.56.93.135:/opt/outlivion-api/
+  /Users/kelemetovmuhamed/Documents/Outlivion\ baza/vpn-core/ \
+  root@72.56.93.135:/opt/vpn-core/
 
 # 2. На сервере - установка зависимостей
-ssh root@72.56.93.135 "cd /opt/outlivion-api && npm install"
+ssh root@72.56.93.135 "cd /opt/vpn-core && npm install"
 
 # 3. На сервере - пересборка
-ssh root@72.56.93.135 "cd /opt/outlivion-api && npm run build"
+ssh root@72.56.93.135 "cd /opt/vpn-core && npm run build"
 
 # 4. На сервере - перезапуск
-ssh root@72.56.93.135 "systemctl restart outlivion-api"
+ssh root@72.56.93.135 "systemctl restart vpn-core"
 
 # 5. Проверка
-ssh root@72.56.93.135 "systemctl status outlivion-api"
-ssh root@72.56.93.135 "journalctl -u outlivion-api -n 50 | grep -i scheduler"
+ssh root@72.56.93.135 "systemctl status vpn-core"
+ssh root@72.56.93.135 "journalctl -u vpn-core -n 50 | grep -i scheduler"
 ```
 
 ---

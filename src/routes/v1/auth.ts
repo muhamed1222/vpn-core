@@ -192,7 +192,7 @@ export async function authRoutes(fastify: FastifyInstance) {
         }
       }
       
-      // Возвращаем данные в формате, который ожидает vpnwebsite
+      // Возвращаем данные в формате, который ожидает vpn-tg-app
       return reply.send({
         id: request.user.tgId,
         firstName: request.user.firstName || '',

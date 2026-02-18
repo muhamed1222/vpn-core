@@ -19,10 +19,10 @@ openssl rand -base64 32
 # echo "your-secret-admin-key-2026"
 
 # Добавьте в .env
-echo "ADMIN_API_KEY=your-generated-key-here" >> /opt/outlivion-api/.env
+echo "ADMIN_API_KEY=your-generated-key-here" >> /opt/vpn-core/.env
 
 # Перезапустите API
-sudo systemctl restart outlivion-api
+sudo systemctl restart vpn-core
 ```
 
 ### 2. На фронтенде (Vercel или сервер)
@@ -36,7 +36,7 @@ sudo systemctl restart outlivion-api
 
 #### Если на сервере:
 ```bash
-echo "ADMIN_API_KEY=your-generated-key-here" >> /path/to/vpnwebsite/.env
+echo "ADMIN_API_KEY=your-generated-key-here" >> /path/to/vpn-tg-app/.env
 # Перезапустите Next.js
 ```
 
@@ -60,4 +60,4 @@ openssl rand -base64 32
 
 1. Проверьте, что ключ одинаковый на бэкенде и фронтенде
 2. Проверьте, что API сервер перезапущен
-3. Проверьте логи API: `journalctl -u outlivion-api -n 50`
+3. Проверьте логи API: `journalctl -u vpn-core -n 50`

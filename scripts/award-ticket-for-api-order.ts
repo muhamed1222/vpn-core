@@ -12,7 +12,7 @@ import * as ordersRepo from '../src/storage/ordersRepo.js';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
-const BOT_DB_PATH = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+const BOT_DB_PATH = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
 const API_DB_PATH = process.env.DATABASE_PATH || path.resolve(process.cwd(), 'data/db.sqlite');
 
 const orderId = process.argv[2];

@@ -12,7 +12,7 @@
 **Статус:** ✅ **ACTIVE (RUNNING)**
 
 ```
-● outlivion-api.service - Outlivion API
+● vpn-core.service - Outlivion API
    Active: active (running) since Sun 2026-01-18 02:04:36 UTC; 1h 40min ago
    Main PID: 738935 (node)
    Memory: 29.4M
@@ -50,7 +50,7 @@
 
 **Статус:** ✅ **ДОСТУПНА**
 
-- ✅ Файл базы данных бота существует: `/root/vpn_bot/data/database.sqlite`
+- ✅ Файл базы данных бота существует: `/root/vpn-bot/data/database.sqlite`
 - ✅ Активный конкурс найден в базе:
   - ID: `550e8400-e29b-41d4-a716-446655440000`
   - Название: `🎉 Розыгрыш Outlivion — 10 призов!`
@@ -63,11 +63,11 @@
 
 Проверка переменных окружения:
 ```bash
-cat /opt/outlivion-api/.env | grep -E '(BOT_DATABASE_PATH|ADMIN_ID|ADMIN_API_KEY)'
+cat /opt/vpn-core/.env | grep -E '(BOT_DATABASE_PATH|ADMIN_ID|ADMIN_API_KEY)'
 ```
 
 **Должны быть установлены:**
-- `BOT_DATABASE_PATH=/root/vpn_bot/data/database.sqlite`
+- `BOT_DATABASE_PATH=/root/vpn-bot/data/database.sqlite`
 - `ADMIN_ID=7972426786` (или ваш ID)
 - `ADMIN_API_KEY=...` (ваш ключ)
 
@@ -79,7 +79,7 @@ cat /opt/outlivion-api/.env | grep -E '(BOT_DATABASE_PATH|ADMIN_ID|ADMIN_API_KEY
 
 Проверка наличия новых модулей:
 ```bash
-ls -la /opt/outlivion-api/dist/services/
+ls -la /opt/vpn-core/dist/services/
 ```
 
 **Ожидается:**
@@ -88,7 +88,7 @@ ls -la /opt/outlivion-api/dist/services/
 **Требуется:**
 1. Синхронизация новых файлов на сервер
 2. Пересборка проекта (`npm run build`)
-3. Перезапуск сервиса (`systemctl restart outlivion-api`)
+3. Перезапуск сервиса (`systemctl restart vpn-core`)
 
 ---
 
@@ -97,8 +97,8 @@ ls -la /opt/outlivion-api/dist/services/
 **Статус:** ✅ **РАБОТАЮТ**
 
 ```
-PID 738935: /usr/bin/node /opt/outlivion-api/dist/server.js (API сервер)
-PID 749606: node /root/vpn_bot/node_modules/.bin/tsx server.ts (Telegram бот)
+PID 738935: /usr/bin/node /opt/vpn-core/dist/server.js (API сервер)
+PID 749606: node /root/vpn-bot/node_modules/.bin/tsx server.ts (Telegram бот)
 ```
 
 - ✅ API сервер работает стабильно
@@ -136,16 +136,16 @@ PID 749606: node /root/vpn_bot/node_modules/.bin/tsx server.ts (Telegram бот)
 ```bash
 # Синхронизация файлов
 rsync -avz --exclude 'node_modules' --exclude '.git' \
-  /path/to/local/vpn_api/ root@72.56.93.135:/opt/outlivion-api/
+  /path/to/local/vpn-core/ root@72.56.93.135:/opt/vpn-core/
 
 # На сервере
-cd /opt/outlivion-api
+cd /opt/vpn-core
 npm install  # Установит node-cron
 npm run build
-systemctl restart outlivion-api
+systemctl restart vpn-core
 
 # Проверка
-journalctl -u outlivion-api -n 50 | grep -i scheduler
+journalctl -u vpn-core -n 50 | grep -i scheduler
 ```
 
 ---
@@ -161,7 +161,7 @@ journalctl -u outlivion-api -n 50 | grep -i scheduler
    - Проверять очередь повторов через `/v1/admin/award-retry-stats` (после применения изменений)
 
 3. **Профилактика:**
-   - Регулярно проверять логи: `journalctl -u outlivion-api -n 100`
+   - Регулярно проверять логи: `journalctl -u vpn-core -n 100`
    - Мониторить использование памяти и CPU
    - Проверять доступность базы данных
 

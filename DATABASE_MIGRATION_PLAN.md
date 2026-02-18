@@ -146,15 +146,15 @@ model Referral {
 ## 3. Этапы миграции
 
 ### Этап 1: Подготовка (Локально)
-1.  Создать папку `packages/database` (или в `vpn_api`).
+1.  Создать папку `packages/database` (или в `vpn-core`).
 2.  Инициализировать Prisma: `npx prisma init`.
 3.  Создать `docker-compose.yml` с Postgres.
 4.  Применить схему: `npx prisma db push`.
 
 ### Этап 2: Скрипт миграции данных
 Написать TS-скрипт, который:
-1.  Читает `vpn_bot/data/database.sqlite`.
-2.  Читает `vpn_api/data/db.sqlite`.
+1.  Читает `vpn-bot/data/database.sqlite`.
+2.  Читает `vpn-core/data/db.sqlite`.
 3.  **Users:** Переносит пользователей из бота в Postgres (конфликтов быть не должно, `id` = telegram_id).
 4.  **Orders:**
     *   Переносит заказы из бота.
@@ -167,7 +167,7 @@ model Referral {
     *   Заменить `better-sqlite3` на `PrismaClient`.
     *   Удалить код с `ATTACH DATABASE`.
     *   Переписать репозитории (`ordersRepo.ts`, `keysRepo.ts`).
-2.  **VPN Bot:**
+2.  **vpn-bot:**
     *   Заменить `better-sqlite3` на `PrismaClient`.
     *   Переписать сервисы (`userService.ts`, `orderService.ts`).
 
@@ -187,8 +187,8 @@ import Database from 'better-sqlite3';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const botDb = new Database('./vpn_bot/data/database.sqlite');
-const apiDb = new Database('./vpn_api/data/db.sqlite');
+const botDb = new Database('./vpn-bot/data/database.sqlite');
+const apiDb = new Database('./vpn-core/data/db.sqlite');
 
 async function migrate() {
   console.log('Starting migration...');

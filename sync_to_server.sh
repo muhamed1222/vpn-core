@@ -1,10 +1,10 @@
 #!/bin/bash
-# Скрипт для синхронизации изменений vpn_api на сервер
+# Скрипт для синхронизации изменений vpn-core на сервер
 
 SERVER="root@72.56.93.135"
-SERVER_PATH="/root/vpn_api"
+SERVER_PATH="/root/vpn-core"
 
-echo "📤 Синхронизация файлов vpn_api на сервер..."
+echo "📤 Синхронизация файлов vpn-core на сервер..."
 echo ""
 
 # Файлы для синхронизации
@@ -30,7 +30,7 @@ echo ""
 echo "✅ Все файлы скопированы!"
 echo ""
 echo "🔄 Перезапуск API на сервере..."
-ssh "$SERVER" "cd $SERVER_PATH && npm run build && pm2 restart vpn_api && pm2 logs vpn_api --lines 10 --nostream"
+ssh "$SERVER" "cd $SERVER_PATH && npm run build && pm2 restart vpn-core && pm2 logs vpn-core --lines 10 --nostream"
 
 echo ""
 echo "✅ Синхронизация завершена!"

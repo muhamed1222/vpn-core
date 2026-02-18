@@ -17,7 +17,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BOT_DB_PATH = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+const BOT_DB_PATH = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
 const API_DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, '../data/db.sqlite');
 
 interface Contest {
@@ -72,7 +72,7 @@ function checkContest(): void {
 
     if (allContests.length === 0) {
       console.warn('   ⚠️  В базе нет конкурсов');
-      console.log('   💡 Создайте конкурс с помощью: cd vpn_bot && npx tsx scripts/create_contest.ts');
+      console.log('   💡 Создайте конкурс с помощью: cd vpn-bot && npx tsx scripts/create_contest.ts');
     } else {
       console.log(`   📊 Найдено конкурсов: ${allContests.length}`);
       

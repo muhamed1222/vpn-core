@@ -226,7 +226,7 @@ git push origin main
 [main 49e9f50] Fix: добавлены настройки Vercel...
  6 files changed, 74 insertions(+), 1 deletion(-)
 
-To https://github.com/muhamed1222/vpnwebsite.git
+To https://github.com/muhamed1222/vpn-tg-app.git
    fc4275c..49e9f50  main -> main
 ```
 

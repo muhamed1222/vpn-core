@@ -119,7 +119,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
 
           // Начисляем билеты конкурса (покупателю и рефереру, если применимо)
           // ВАЖНО: Изолируем ошибки начисления - они не должны прерывать основной поток обработки платежа
-          const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+          const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
           if (fs.existsSync(botDbPath)) {
             try {
               // Преобразуем created_at в ISO string
@@ -297,7 +297,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
       updated_at?: number;
     }> = [];
 
-    const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn_bot/data/database.sqlite';
+    const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
     if (fs.existsSync(botDbPath)) {
       try {
         const { getDatabase } = await import('../../storage/db.js');

@@ -20,13 +20,13 @@
 
 **Фронтенд:**
 - URL: `/admin/contest`
-- Файл: `vpnwebsite/app/admin/contest/page.tsx`
+- Файл: `vpn-tg-app/app/admin/contest/page.tsx`
 
 **API:**
 - Backend: `GET /v1/admin/contest/participants?contest_id={id}`
 - Frontend: `GET /api/admin/contest/participants?contest_id={id}`
-- Файл бэкенда: `vpn_api/src/routes/v1/admin.ts`
-- Файл фронтенда: `vpnwebsite/app/api/admin/contest/participants/route.ts`
+- Файл бэкенда: `vpn-core/src/routes/v1/admin.ts`
+- Файл фронтенда: `vpn-tg-app/app/api/admin/contest/participants/route.ts`
 
 ## 📊 Данные, которые собираются
 
@@ -67,7 +67,7 @@
 **На API сервере:**
 ```env
 ADMIN_ID=12345678  # Ваш Telegram ID (через запятую для нескольких админов)
-BOT_DATABASE_PATH=/path/to/vpn_bot/data/database.sqlite
+BOT_DATABASE_PATH=/path/to/vpn-bot/data/database.sqlite
 ```
 
 ### 2. Доступ к панели

@@ -432,7 +432,7 @@ class AwardRetryScheduler {
     
     console.log(`[AwardRetryScheduler] Processing ${this.retryQueue.size} items in retry queue...`);
     
-    const botDbPath = process.env.BOT_DB_PATH || '/root/vpn_bot/data/bot.db';
+    const botDbPath = process.env.BOT_DB_PATH || '/root/vpn-bot/data/bot.db';
     const maxAttempts = 3; // Максимум 3 попытки
     const itemsToRetry: string[] = [];
     

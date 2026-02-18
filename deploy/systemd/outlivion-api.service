@@ -6,14 +6,14 @@ After=network.target
 Type=simple
 User=outlivion
 Group=outlivion
-WorkingDirectory=/opt/outlivion-api
-EnvironmentFile=/opt/outlivion-api/.env
-ExecStart=/usr/bin/node /opt/outlivion-api/dist/server.js
+WorkingDirectory=/opt/vpn-core
+EnvironmentFile=/opt/vpn-core/.env
+ExecStart=/usr/bin/node /opt/vpn-core/dist/server.js
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=outlivion-api
+SyslogIdentifier=vpn-core
 
 [Install]
 WantedBy=multi-user.target

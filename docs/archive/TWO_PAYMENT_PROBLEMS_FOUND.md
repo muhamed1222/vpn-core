@@ -47,7 +47,7 @@
 #### Анализ логов API:
 ```bash
 # Поиск webhook за последние 30 минут
-journalctl -u outlivion-api.service --since '30 minutes ago' | grep -E 'webhook|payment'
+journalctl -u vpn-core.service --since '30 minutes ago' | grep -E 'webhook|payment'
 ```
 
 **Результат:** ПУСТО (0 записей) ❌
@@ -144,7 +144,7 @@ location /v1/payments/webhook {
 
 **Проверка статуса API:**
 ```bash
-ssh root@72.56.93.135 "systemctl status outlivion-api.service"
+ssh root@72.56.93.135 "systemctl status vpn-core.service"
 ```
 
 **Должно быть:**
@@ -219,7 +219,7 @@ setInterval(async () => {
 
 ```bash
 # 1. Найти заказы без билетов
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 SELECT o.id, o.user_id, datetime(o.created_at/1000, '\''unixepoch'\'')
 FROM orders o
 LEFT JOIN ticket_ledger t ON t.order_id = o.id
@@ -232,7 +232,7 @@ LIMIT 10;
 "'
 
 # 2. Начислить билет (замените ORDER_ID и USER_ID)
-ssh root@72.56.93.135 'sqlite3 /root/vpn_bot/data/database.sqlite "
+ssh root@72.56.93.135 'sqlite3 /root/vpn-bot/data/database.sqlite "
 INSERT INTO ticket_ledger (id, contest_id, referrer_id, referred_id, order_id, delta, reason, created_at)
 VALUES (
   '\''ticket_ORDER_ID_'\'' || strftime('\''%s'\'', '\''now'\'') || '\''000'\'',
@@ -291,10 +291,10 @@ VALUES (
 
 | Файл | Изменение | Для чего |
 |------|-----------|----------|
-| `/root/vpn_bot/.env` | `TELEGRAM_USE_POLLING=1` | Telegram Payments fix |
-| `/root/vpn_bot/server.ts` | DEBUG лог (строка 25) | Диагностика |
-| `/root/vpn_bot/src/bot/index.ts` | Логи в `successful_payment` | Telegram Payments диагностика |
-| `/root/vpn_bot/src/services/orderProcessingService.ts` | Логи в `activateOrder` | Общая диагностика |
+| `/root/vpn-bot/.env` | `TELEGRAM_USE_POLLING=1` | Telegram Payments fix |
+| `/root/vpn-bot/server.ts` | DEBUG лог (строка 25) | Диагностика |
+| `/root/vpn-bot/src/bot/index.ts` | Логи в `successful_payment` | Telegram Payments диагностика |
+| `/root/vpn-bot/src/services/orderProcessingService.ts` | Логи в `activateOrder` | Общая диагностика |
 
 ---
 

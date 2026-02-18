@@ -14,7 +14,7 @@ import { MarzbanService } from './integrations/marzban/service.js';
 // При запуске из dist/server.js путь должен быть относительно корня проекта
 import { join } from 'path';
 // Путь к .env: из dist/server.js -> на уровень выше -> .env
-// process.cwd() вернет /opt/outlivion-api при запуске через systemd
+// process.cwd() вернет /opt/vpn-core при запуске через systemd
 const envPath = join(process.cwd(), '.env');
 dotenv.config({ path: envPath });
 

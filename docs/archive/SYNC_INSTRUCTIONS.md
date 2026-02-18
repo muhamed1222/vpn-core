@@ -1,4 +1,4 @@
-# Инструкция по синхронизации изменений vpn_api на сервер
+# Инструкция по синхронизации изменений vpn-core на сервер
 
 ## Изменения
 1. **src/auth/telegram.ts** - добавлен `photo_url` в интерфейс `TelegramUser`
@@ -9,17 +9,17 @@
 
 ### 1. Копирование файлов на сервер (локально):
 ```bash
-scp src/auth/telegram.ts root@72.56.93.135:/root/vpn_api/src/auth/telegram.ts
-scp src/auth/telegramPhoto.ts root@72.56.93.135:/root/vpn_api/src/auth/telegramPhoto.ts
-scp src/routes/v1/auth.ts root@72.56.93.135:/root/vpn_api/src/routes/v1/auth.ts
+scp src/auth/telegram.ts root@72.56.93.135:/root/vpn-core/src/auth/telegram.ts
+scp src/auth/telegramPhoto.ts root@72.56.93.135:/root/vpn-core/src/auth/telegramPhoto.ts
+scp src/routes/v1/auth.ts root@72.56.93.135:/root/vpn-core/src/routes/v1/auth.ts
 ```
 
 ### 2. Перезапуск API на сервере:
 ```bash
 ssh root@72.56.93.135
-cd /root/vpn_api
+cd /root/vpn-core
 npm run build
-pm2 restart vpn_api
+pm2 restart vpn-core
 ```
 
 Или если pm2 не установлен:
@@ -31,7 +31,7 @@ npm start &
 ## Проверка
 После перезапуска проверьте логи:
 ```bash
-pm2 logs vpn_api --lines 20
+pm2 logs vpn-core --lines 20
 ```
 
 Или проверьте, что API отвечает:

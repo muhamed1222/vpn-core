@@ -77,7 +77,7 @@ https://api.outlivion.space/v1/payments/webhook
 Возможно, в коде бота жестко прописан старый URL. Проверяем:
 
 ```bash
-ssh root@72.56.93.135 "grep -rn 'vpn.outlivion.space/webhook' /root/vpn_bot/"
+ssh root@72.56.93.135 "grep -rn 'vpn.outlivion.space/webhook' /root/vpn-bot/"
 ```
 
 **Если найдется:**
@@ -129,7 +129,7 @@ ssh root@72.56.93.135 "grep -rn 'vpn.outlivion.space/webhook' /root/vpn_bot/"
 
 **1. Найти старый URL в коде:**
 ```bash
-ssh root@72.56.93.135 "grep -rn 'vpn.outlivion.space' /root/vpn_bot/ | grep webhook"
+ssh root@72.56.93.135 "grep -rn 'vpn.outlivion.space' /root/vpn-bot/ | grep webhook"
 ```
 
 **2. Если найдется файл:**
@@ -198,7 +198,7 @@ https://api.outlivion.space/v1/payments/webhook
 
 ```bash
 # 1. Следить за логами API
-ssh root@72.56.93.135 "journalctl -u outlivion-api.service -f"
+ssh root@72.56.93.135 "journalctl -u vpn-core.service -f"
 
 # 2. Сделать покупку через бота (YooKassa)
 # 3. Посмотреть логи - должно быть:
@@ -211,7 +211,7 @@ ssh root@72.56.93.135 "journalctl -u outlivion-api.service -f"
 
 ```bash
 # 1. Следить за логами бота
-ssh root@72.56.93.135 "tail -f /root/vpn_bot/bot.log | grep TELEGRAM_PAYMENT"
+ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log | grep TELEGRAM_PAYMENT"
 
 # 2. Сделать покупку через бота (Telegram Stars)
 # 3. Посмотреть логи - должно быть:
