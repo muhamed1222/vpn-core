@@ -1,61 +1,96 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import axios from 'axios';
+import * as http from 'http';
+import * as https from 'https';
 import { trackDevice } from '../storage/devicesRepo.js';
 
-/**
- * Subscription Proxy
- * 
- * Перехватывает запросы к /sub/:token от VPN-клиентов.
- * 1. Логирует user-agent, IP, timestamp → SQLite (device_connections)
- * 2. Проксирует запрос в Marzban и возвращает оригинальный ответ
- * 
- * Токен в URL содержит base64 username: dGdfOTc4ODU1NTE2... → tg_978855516,...
- */
+// Кеш для дебаунса записи в БД: ключ -> timestamp
+const deviceTrackingCache = new Map<string, number>();
+const TRACKING_COOLDOWN_MS = 60 * 1000; // 1 минута
+
+// Общий агент с keepAlive для переиспользования соединений
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
+
+// Создаем инстанс axios с агентами
+const marzbanClient = axios.create({
+    timeout: 10000, // 10 секунд
+    httpAgent,
+    httpsAgent,
+    validateStatus: () => true, // Не бросать ошибку на 404/500
+    maxRedirects: 0,
+});
+
 export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
     const MARZBAN_URL = process.env.MARZBAN_API_URL || 'http://127.0.0.1:8000';
 
-    // GET /sub/:token — основной subscription endpoint
-    fastify.get<{ Params: { token: string } }>('/sub/:token', async (request, reply) => {
+    // Очистка старого кеша раз в час
+    setInterval(() => {
+        const now = Date.now();
+        for (const [key, time] of deviceTrackingCache.entries()) {
+            if (now - time > TRACKING_COOLDOWN_MS * 60) {
+                deviceTrackingCache.delete(key);
+            }
+        }
+    }, 3600 * 1000);
+
+    // Основной хендлер
+    const handleProxy = async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply, isInfo = false) => {
         const { token } = request.params;
-        const userAgent = request.headers['user-agent'] || 'unknown';
+        const userAgent = (request.headers['user-agent'] as string) || 'unknown';
+        // Получаем реальный IP
         const ipAddress = (request.headers['x-real-ip'] as string)
             || (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
             || request.ip;
 
-        // 1. Извлекаем username из токена (base64 decode)
-        const userRef = extractUserRefFromToken(token);
+        // 1. Асинхронный трекинг (Fire-and-forget, Debounced)
+        try {
+            if (token && userAgent && userAgent !== 'unknown') {
+                const cacheKey = `${token}:${userAgent}:${ipAddress}`;
+                const lastTracked = deviceTrackingCache.get(cacheKey);
+                const now = Date.now();
 
-        // 2. Логируем устройство (async, не блокирует ответ)
-        if (userRef && userAgent !== 'unknown') {
-            try {
-                trackDevice({
-                    userRef,
-                    userAgent,
-                    ipAddress,
-                });
-                fastify.log.info({
-                    userRef,
-                    userAgent,
-                    ipAddress,
-                }, '[SubProxy] Device tracked');
-            } catch (err: any) {
-                fastify.log.warn({ err: err.message, userRef }, '[SubProxy] Failed to track device');
+                // Пишем в БД только если прошло время кулдауна, или никогда не писали
+                if (!lastTracked || (now - lastTracked > TRACKING_COOLDOWN_MS)) {
+                    // Ставим в кеш СРАЗУ, чтобы следующие запросы (через мс) уже отсекались
+                    deviceTrackingCache.set(cacheKey, now);
+
+                    // Парсим токен в setImmediate, чтобы не блокировать этот request
+                    setImmediate(() => {
+                        try {
+                            const userRef = extractUserRefFromToken(token);
+                            if (userRef) {
+                                trackDevice({
+                                    userRef,
+                                    userAgent,
+                                    ipAddress,
+                                });
+                            }
+                        } catch (err: any) {
+                            // Тихо игнорируем ошибки
+                        }
+                    });
+                }
             }
+        } catch (e) {
+            // Игнорируем ошибки трекинга
         }
 
-        // 3. Проксируем запрос к Marzban
+        // 2. Проксирование (Stream)
         try {
-            const marzbanResp = await axios.get(`${MARZBAN_URL}/sub/${token}`, {
+            const targetUrl = `${MARZBAN_URL}/sub/${token}${isInfo ? '/info' : ''}`;
+
+            const response = await marzbanClient.get(targetUrl, {
                 headers: {
                     'User-Agent': userAgent,
                     'Accept': request.headers['accept'] || '*/*',
+                    // Можно добавить Host, если нужно
+                    // 'Host': '127.0.0.1:8000' 
                 },
-                responseType: 'text',
-                timeout: 15000,
-                validateStatus: () => true, // Принимаем любой HTTP-статус
+                responseType: 'stream' // Важно для производительности
             });
 
-            // Копируем заголовки ответа Marzban
+            // Копируем заголовки ответа
             const headersToForward = [
                 'content-type',
                 'subscription-userinfo',
@@ -63,73 +98,58 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                 'profile-title',
                 'content-disposition',
                 'profile-web-page-url',
+                'cache-control',
+                'date',
+                'etag'
             ];
 
             for (const header of headersToForward) {
-                const value = marzbanResp.headers[header];
+                const value = response.headers[header];
                 if (value) {
                     reply.header(header, value);
                 }
             }
 
-            return reply.status(marzbanResp.status).send(marzbanResp.data);
+            // Отправляем поток клиенту
+            return reply.status(response.status).send(response.data);
+
         } catch (err: any) {
-            fastify.log.error({ err: err.message, token: token.substring(0, 10) + '...' }, '[SubProxy] Marzban proxy failed');
+            // Логируем только реальные сетевые ошибки
+            fastify.log.error({
+                err: err.message,
+                token: token.substring(0, 10) + '...',
+            }, '[SubProxy] Proxy Request Failed');
+
             return reply.status(502).send('Bad Gateway');
         }
-    });
+    };
 
-    // GET /sub/:token/info — некоторые клиенты запрашивают доп. инфо
-    fastify.get<{ Params: { token: string } }>('/sub/:token/info', async (request, reply) => {
-        const { token } = request.params;
-        try {
-            const marzbanResp = await axios.get(`${MARZBAN_URL}/sub/${token}/info`, {
-                headers: { 'User-Agent': request.headers['user-agent'] || '' },
-                responseType: 'text',
-                timeout: 15000,
-                validateStatus: () => true,
-            });
+    // GET /sub/:token
+    fastify.get<{ Params: { token: string } }>('/sub/:token', (req, rep) => handleProxy(req, rep, false));
 
-            const contentType = marzbanResp.headers['content-type'];
-            if (contentType) reply.header('content-type', contentType);
-
-            return reply.status(marzbanResp.status).send(marzbanResp.data);
-        } catch (err: any) {
-            return reply.status(502).send('Bad Gateway');
-        }
-    });
+    // GET /sub/:token/info
+    fastify.get<{ Params: { token: string } }>('/sub/:token/info', (req, rep) => handleProxy(req, rep, true));
 }
 
 /**
  * Извлекает user_ref (marzban username) из subscription token.
- * 
- * Формат Marzban-токена: base64(username,timestamp) + random suffix
- * Пример: dGdfOTc4ODU1NTE2LDE3NzExNDc3MzE8x7xAzvZbH
- *   → decode → tg_978855516,1771147731
- *   → userRef = tg_978855516
+ * Токен Marzban закодирован в base64url.
  */
 function extractUserRefFromToken(token: string): string | null {
+    if (!token) return null;
     try {
-        // Marzban token = base64url(username,timestamp) + random chars
-        // Пробуем разные длины base64 (кратные 4, с padding)
-        for (let len = token.length; len >= 20; len--) {
-            const candidate = token.substring(0, len);
-            try {
-                // Заменяем URL-safe символы
-                const base64 = candidate.replace(/-/g, '+').replace(/_/g, '/');
-                const decoded = Buffer.from(base64, 'base64').toString('utf-8');
+        // В Marzban токен начинается с base64-строки
+        // Берем первые 60 символов, заменяем URL-safe символы и декодируем
+        const chunk = token.substring(0, 60).replace(/-/g, '+').replace(/_/g, '/');
+        const buffer = Buffer.from(chunk, 'base64');
+        const decoded = buffer.toString('utf-8');
 
-                // Проверяем формат: username,timestamp
-                if (decoded.includes(',') && (decoded.startsWith('tg_') || /^[a-zA-Z0-9_]+,\d+$/.test(decoded))) {
-                    const username = decoded.split(',')[0];
-                    if (username && username.length > 2) {
-                        return username;
-                    }
-                }
-            } catch {
-                continue;
-            }
+        // Ищем паттерн "username," или "tg_123,"
+        const match = decoded.match(/([a-zA-Z0-9_]{3,}),\d+/);
+        if (match && match[1]) {
+            return match[1];
         }
+
         return null;
     } catch {
         return null;
