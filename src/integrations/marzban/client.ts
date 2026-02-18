@@ -10,6 +10,8 @@ export interface MarzbanUser {
   links: string[];
   remark?: string;
   note?: string;
+  online_at?: string;
+  onlines?: any[];
 }
 
 export class MarzbanClient {
@@ -99,5 +101,17 @@ export class MarzbanClient {
       data: userData,
     });
     return response.data;
+  }
+
+  async getUserUsage(username: string): Promise<any> {
+    try {
+      const response = await this.request({
+        method: 'get',
+        url: `/api/user/${username}/usage`,
+      });
+      return response.data;
+    } catch (e) {
+      return null;
+    }
   }
 }
