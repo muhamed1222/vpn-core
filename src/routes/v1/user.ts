@@ -1,5 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { createVerifyAuth } from '../../auth/verifyAuth.js';
+import { getDevicesByUser } from '../../storage/devicesRepo.js';
 
 export async function userRoutes(fastify: FastifyInstance) {
   const jwtSecret: string = fastify.authJwtSecret;
@@ -177,7 +178,9 @@ export async function userRoutes(fastify: FastifyInstance) {
 
   /**
    * GET /v1/user/devices
-   * Информация об устройствах и активности пользователя
+   * Информация об устройствах и активности пользователя.
+   * Читает из device_connections (заполняется subscription proxy).
+   * Если таблица пуста — фолбэк на Marzban API.
    */
   fastify.get('/devices', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
@@ -191,15 +194,48 @@ export async function userRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      const userRef = `tg_${targetTgId}`;
+      const dbDevices = getDevicesByUser(userRef);
+
+      // Если в нашей БД есть записи — отдаём их
+      if (dbDevices.length > 0) {
+        const now = Date.now();
+        const FIVE_MINUTES = 5 * 60 * 1000;
+
+        const devices = dbDevices.map(d => ({
+          id: `device_${d.id}`,
+          name: `${d.device_type} (${d.app_name})`,
+          type: d.device_type,
+          app: d.app_name,
+          lastActive: d.last_seen,
+          firstSeen: d.first_seen,
+          ipAddress: d.ip_address,
+          requestCount: d.request_count,
+          status: (now - new Date(d.last_seen).getTime() < FIVE_MINUTES) ? 'online' as const : 'offline' as const,
+        }));
+
+        // Дополняем данными из Marzban (ноды, онлайн-статус)
+        const marzbanInfo = await marzbanService.getDeviceInfo(targetTgId).catch(() => null);
+
+        return reply.send({
+          devices,
+          nodes: marzbanInfo?.nodes || [],
+          lastOnline: marzbanInfo?.lastOnline || dbDevices[0]?.last_seen || null,
+          userAgent: marzbanInfo?.userAgent || dbDevices[0]?.user_agent || '',
+          subUpdatedAt: marzbanInfo?.subUpdatedAt || null,
+        });
+      }
+
+      // Фолбэк: нет данных в device_connections → берём из Marzban
       const deviceInfo = await marzbanService.getDeviceInfo(targetTgId);
       if (!deviceInfo) {
-        return reply.send([]);
+        return reply.send({ devices: [], nodes: [], lastOnline: null, userAgent: '', subUpdatedAt: null });
       }
 
       return reply.send(deviceInfo);
     } catch (error: any) {
       fastify.log.error({ targetTgId, error: error.message }, '[UserDevices] Failed to get device info');
-      return reply.send([]);
+      return reply.send({ devices: [], nodes: [], lastOnline: null, userAgent: '', subUpdatedAt: null });
     }
   });
 

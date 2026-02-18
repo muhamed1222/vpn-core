@@ -3,9 +3,11 @@ import dotenv from 'dotenv';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import { registerRoutes } from './routes/index.js';
+import { subscriptionProxyRoutes } from './routes/subProxy.js';
 import { SqliteOrderStore } from './store/sqlite-order-store.js';
 import { OrderStore } from './store/order-store.js';
 import { initDatabase, closeDatabase } from './storage/db.js';
+import { initDevicesTable } from './storage/devicesRepo.js';
 import { YooKassaClient } from './integrations/yookassa/client.js';
 import { MarzbanService } from './integrations/marzban/service.js';
 
@@ -69,6 +71,7 @@ declare module 'fastify' {
 
 // Инициализируем базу данных
 initDatabase(DATABASE_PATH);
+initDevicesTable();
 
 // Инициализируем хранилище заказов
 const orderStore = new SqliteOrderStore();
@@ -156,6 +159,9 @@ const start = async () => {
     });
 
     await registerRoutes(fastify);
+
+    // Subscription proxy для трекинга устройств (на корневом уровне, /sub/:token)
+    await fastify.register(subscriptionProxyRoutes);
 
     console.log('Registered routes:');
     console.log(fastify.printRoutes());
