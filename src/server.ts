@@ -8,6 +8,7 @@ import { SqliteOrderStore } from './store/sqlite-order-store.js';
 import { OrderStore } from './store/order-store.js';
 import { initDatabase, closeDatabase } from './storage/db.js';
 import { initDevicesTable } from './storage/devicesRepo.js';
+import { startLogWatcher } from './services/logWatcher.js'; // <-- Added import
 import { YooKassaClient } from './integrations/yookassa/client.js';
 import { MarzbanService } from './integrations/marzban/service.js';
 
@@ -72,6 +73,7 @@ declare module 'fastify' {
 // Инициализируем базу данных
 initDatabase(DATABASE_PATH);
 initDevicesTable();
+startLogWatcher();
 
 // Инициализируем хранилище заказов
 const orderStore = new SqliteOrderStore();
