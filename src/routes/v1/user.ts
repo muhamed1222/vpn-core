@@ -176,6 +176,34 @@ export async function userRoutes(fastify: FastifyInstance) {
   });
 
   /**
+   * GET /v1/user/devices
+   * Информация об устройствах и активности пользователя
+   */
+  fastify.get('/devices', { preHandler: verifyAuth }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+
+    const tgIdParamRaw = (request.query as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
+    if (!targetTgId) {
+      return reply.status(400).send({ error: 'Missing Telegram ID' });
+    }
+
+    try {
+      const deviceInfo = await marzbanService.getDeviceInfo(targetTgId);
+      if (!deviceInfo) {
+        return reply.send([]);
+      }
+
+      return reply.send(deviceInfo);
+    } catch (error: any) {
+      fastify.log.error({ targetTgId, error: error.message }, '[UserDevices] Failed to get device info');
+      return reply.send([]);
+    }
+  });
+
+  /**
    * GET /v1/user/referrals
    * Статистика реферальной программы
    */

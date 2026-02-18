@@ -10,6 +10,18 @@ export interface MarzbanUser {
   links: string[];
   remark?: string;
   note?: string;
+  online_at?: string | null;
+  sub_last_user_agent?: string | null;
+  sub_updated_at?: string | null;
+}
+
+export interface MarzbanUserUsage {
+  username: string;
+  usages: {
+    node_id: number | null;
+    node_name: string;
+    used_traffic: number;
+  }[];
 }
 
 export class MarzbanClient {
@@ -99,5 +111,18 @@ export class MarzbanClient {
       data: userData,
     });
     return response.data;
+  }
+
+  async getUserUsage(username: string): Promise<MarzbanUserUsage | null> {
+    try {
+      const response = await this.request({
+        method: 'get',
+        url: `/api/user/${username}/usage`,
+      });
+      return response.data;
+    } catch (error: any) {
+      if (error.response?.status === 404) return null;
+      return null;
+    }
   }
 }

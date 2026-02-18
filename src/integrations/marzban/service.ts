@@ -52,7 +52,7 @@ export class MarzbanService {
    */
   async getUserConfig(tgId: number): Promise<string | null> {
     const userRef = `tg_${tgId}`;
-    
+
     // 1. Проверяем в нашей БД
     const cachedKey = keysRepo.getActiveKey(userRef);
     if (cachedKey) {
@@ -62,9 +62,9 @@ export class MarzbanService {
     // 2. Если в БД нет, тянем из Marzban (1 раз)
     const user = await this.findUser(tgId);
     if (!user) return null;
-    
+
     const url = this.formatSubscriptionUrl(user);
-    
+
     // Сохраняем для будущих GET-запросов (Идемпотентность)
     if (url) {
       keysRepo.saveKey({
@@ -82,7 +82,7 @@ export class MarzbanService {
     const userRef = `tg_${tgId}`;
     let user = await this.findUser(tgId);
     const expireDate = now + (days * 86400);
-    
+
     if (!user) {
       console.log(`[MarzbanService] [WRITE] Creating user tg_${tgId}`);
       user = await this.client.createUser({
@@ -97,7 +97,7 @@ export class MarzbanService {
     } else {
       // Обновляем ТОЛЬКО если подписка просрочена или нужно реально продлить
       const isExpired = !user.expire || user.expire < now;
-      
+
       if (isExpired || user.status !== 'active') {
         console.log(`[MarzbanService] [WRITE] Renewing user ${user.username}`);
         user = await this.client.updateUser(user.username, {
@@ -154,7 +154,7 @@ export class MarzbanService {
     if (!user) return null;
 
     console.log(`[MarzbanService] [WRITE] ROTATE key for user: ${user.username} (tgId: ${tgId})`);
-    
+
     // 1. Сброс токена в Marzban
     await this.client.request({
       method: 'post',
@@ -175,5 +175,78 @@ export class MarzbanService {
     });
 
     return url;
+  }
+
+  async getDeviceInfo(tgId: number) {
+    const user = await this.findUser(tgId);
+    if (!user) return null;
+
+    // Парсим user-agent для определения типа устройства
+    const ua = user.sub_last_user_agent || '';
+    const devices: {
+      id: string;
+      name: string;
+      type: string;
+      app: string;
+      lastActive: string | null;
+      status: 'online' | 'offline';
+    }[] = [];
+
+    if (ua) {
+      let type = 'unknown';
+      let app = ua;
+      const uaLower = ua.toLowerCase();
+
+      if (uaLower.includes('/ios') || uaLower.includes('iphone')) {
+        type = 'iPhone';
+        app = ua.split('/')[0] || 'V2RayTun';
+      } else if (uaLower.includes('/mac') || uaLower.includes('macos')) {
+        type = 'Mac';
+        app = ua.split('/')[0] || 'V2RayTun';
+      } else if (uaLower.includes('/android')) {
+        type = 'Android';
+        app = ua.split('/')[0] || 'V2RayTun';
+      } else if (uaLower.includes('/windows') || uaLower.includes('win')) {
+        type = 'Windows';
+        app = ua.split('/')[0] || 'V2RayTun';
+      } else if (uaLower.includes('happ')) {
+        type = 'iPhone'; // Happ is iOS app
+        app = 'Happ';
+      }
+
+      devices.push({
+        id: `${user.username}_device_1`,
+        name: `${type} (${app})`,
+        type,
+        app,
+        lastActive: user.online_at || null,
+        status: this.isRecentlyOnline(user.online_at) ? 'online' : 'offline',
+      });
+    }
+
+    // Получаем трафик по нодам
+    const usage = await this.client.getUserUsage(user.username);
+    const nodes = (usage?.usages || [])
+      .filter(u => u.used_traffic > 0)
+      .map(u => ({
+        nodeId: u.node_id,
+        nodeName: u.node_name,
+        usedTraffic: u.used_traffic,
+      }));
+
+    return {
+      devices,
+      nodes,
+      lastOnline: user.online_at || null,
+      userAgent: ua,
+      subUpdatedAt: user.sub_updated_at || null,
+    };
+  }
+
+  private isRecentlyOnline(onlineAt: string | null | undefined): boolean {
+    if (!onlineAt) return false;
+    const lastOnline = new Date(onlineAt).getTime();
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    return lastOnline > fiveMinutesAgo;
   }
 }
