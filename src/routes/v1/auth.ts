@@ -34,9 +34,9 @@ export async function authRoutes(fastify: FastifyInstance) {
 
       if (!verifyResult.valid || !verifyResult.user) {
         fastify.log.warn(
-          { 
-            error: verifyResult.error, 
-            botTokenPrefix: botToken ? botToken.substring(0, 10) : 'none' 
+          {
+            error: verifyResult.error,
+            botTokenPrefix: botToken ? botToken.substring(0, 10) : 'none'
           },
           'Telegram initData verification failed'
         );
@@ -156,8 +156,8 @@ export async function authRoutes(fastify: FastifyInstance) {
    * Проверка текущей сессии и возврат данных пользователя с подпиской
    */
   const { createVerifyAuth } = await import('../../auth/verifyAuth.js');
-  const verifyAuth = createVerifyAuth({ 
-    jwtSecret, 
+  const verifyAuth = createVerifyAuth({
+    jwtSecret,
     cookieName,
     botToken: botToken, // Добавляем botToken для поддержки initData
   });
@@ -172,15 +172,21 @@ export async function authRoutes(fastify: FastifyInstance) {
       if (!request.user) {
         return reply.status(401).send({ error: 'Unauthorized' });
       }
-      
+
       // Получаем данные пользователя из Marzban
       const status = await marzbanService.getUserStatus(request.user.tgId);
       const config = await marzbanService.getUserConfig(request.user.tgId);
-      
+
+      fastify.log.info({ tgId: request.user.tgId, status: status ? { status: status.status, expire: status.expire } : 'NOT_FOUND' }, '[AuthMe] Marzban data');
+
       const now = Math.floor(Date.now() / 1000);
-      const isActive = status && status.status === 'active' && 
-                       status.expire && status.expire > now;
-      
+      // Подписка активна если статус 'active' И (срок не установлен ИЛИ еще не вышел)
+      const isActive = status &&
+        status.status === 'active' &&
+        (!status.expire || status.expire === 0 || status.expire > now);
+
+      fastify.log.info({ tgId: request.user.tgId, isActive, now, expire: status?.expire }, '[AuthMe] Computed isActive');
+
       // Получаем фото профиля через Bot API
       let photoUrl: string | null = null;
       if (botToken) {
@@ -191,7 +197,7 @@ export async function authRoutes(fastify: FastifyInstance) {
           fastify.log.warn({ userId: request.user.tgId, error }, '[auth/me] Failed to fetch photo URL');
         }
       }
-      
+
       // Возвращаем данные в формате, который ожидает VPN Website
       return reply.send({
         id: request.user.tgId,

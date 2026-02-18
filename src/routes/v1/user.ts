@@ -56,12 +56,15 @@ export async function userRoutes(fastify: FastifyInstance) {
     fastify.log.info({ targetTgId, requester: request.user.tgId }, '[UserStatus] Querying status from Marzban');
 
     const status = await marzbanService.getUserStatus(targetTgId);
+    fastify.log.info({ targetTgId, status: status ? { username: status.username, status: status.status, expire: status.expire } : 'NOT_FOUND' }, '[UserStatus] Marzban returned data');
 
     const now = Math.floor(Date.now() / 1000);
     // Подписка активна если статус 'active' И (срок не установлен ИЛИ еще не вышел)
     const isActive = status &&
       status.status === 'active' &&
       (!status.expire || status.expire === 0 || status.expire > now);
+
+    fastify.log.info({ targetTgId, isActive, now, expire: status?.expire }, '[UserStatus] Computed isActive');
 
     return reply.send({
       ok: !!isActive,
@@ -114,7 +117,15 @@ export async function userRoutes(fastify: FastifyInstance) {
   fastify.get('/billing', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
-    const status = await marzbanService.getUserStatus(request.user.tgId);
+    const tgIdParamRaw = (request.query as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
+    if (!targetTgId) {
+      return reply.status(400).send({ error: 'Missing Telegram ID' });
+    }
+
+    const status = await marzbanService.getUserStatus(targetTgId);
 
     if (!status) {
       return reply.send({
@@ -160,18 +171,26 @@ export async function userRoutes(fastify: FastifyInstance) {
   fastify.get('/referrals', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
+    const tgIdParamRaw = (request.query as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
+    if (!targetTgId) {
+      return reply.status(400).send({ error: 'Missing Telegram ID' });
+    }
+
     const botDbPath = process.env.BOT_DATABASE_PATH;
     if (!botDbPath) {
       return reply.send({
         totalCount: 0,
         trialCount: 0,
         premiumCount: 0,
-        referralCode: `REF${request.user.tgId}`,
+        referralCode: `REF${targetTgId}`,
       });
     }
 
     const { getReferralStats } = await import('../../storage/referralsRepo.js');
-    const stats = getReferralStats(request.user.tgId, botDbPath);
+    const stats = getReferralStats(targetTgId, botDbPath);
 
     return reply.send(stats);
   });

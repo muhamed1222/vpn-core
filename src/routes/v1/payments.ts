@@ -62,22 +62,22 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
         fastify.log.warn({ orderId }, '[Webhook] Order not found');
         return reply.status(200).send({ ok: true });
       }
-      
-      fastify.log.info({ 
-        orderId, 
-        status: orderRow.status, 
+
+      fastify.log.info({
+        orderId,
+        status: orderRow.status,
         keyType: typeof orderRow.key,
         keyValue: orderRow.key ? orderRow.key.substring(0, 50) : 'null/empty',
         keyLength: orderRow.key ? orderRow.key.length : 0
       }, '[Webhook] Order found, checking status');
-      
+
       // Если ордер уже paid И ключ есть - пропускаем
       const hasValidKey = orderRow.key && typeof orderRow.key === 'string' && orderRow.key.trim() !== '';
       if (orderRow.status === 'paid' && hasValidKey) {
         fastify.log.info({ orderId, hasKey: true }, '[Webhook] Order already processed with key');
         return reply.status(200).send({ ok: true });
       }
-      
+
       // Если ордер paid, но ключа нет - активируем
       if (orderRow.status === 'paid' && !hasValidKey) {
         fastify.log.warn({ orderId, status: orderRow.status, hasKey: false }, '[Webhook] Order is paid but has no key, activating...');
@@ -106,9 +106,9 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
           }
 
           // Обновляем статус заказа и сохраняем ключ
-          const saved = ordersRepo.markPaidWithKey({ 
-            orderId, 
-            key: vlessKey 
+          const saved = ordersRepo.markPaidWithKey({
+            orderId,
+            key: vlessKey
           });
 
           if (!saved) {
@@ -125,7 +125,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
               // Преобразуем created_at в ISO string
               // orderRow.created_at может быть ISO string или нужно взять из базы бота
               let orderCreatedAt = orderRow.created_at || new Date().toISOString();
-              
+
               // Если created_at не в ISO формате, попробуем получить из базы бота
               if (botDbPath && fs.existsSync(botDbPath)) {
                 try {
@@ -139,7 +139,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
                       WHERE id = ?
                       LIMIT 1
                     `).get(orderId) as { created_at: number | string } | undefined;
-                    
+
                     if (botOrder) {
                       // created_at в базе бота - это timestamp в миллисекундах
                       if (typeof botOrder.created_at === 'number') {
@@ -157,7 +157,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
                   // Игнорируем - используем orderRow.created_at
                 }
               }
-              
+
               // АКТИВНОЕ НАЧИСЛЕНИЕ БИЛЕТОВ
               // Используем try-catch для изоляции ошибок начисления от основного потока
               try {
@@ -168,28 +168,28 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
                   planId,
                   orderCreatedAt
                 );
-                
+
                 if (ticketsAwarded) {
-                  fastify.log.info({ 
-                    tgId, 
-                    orderId, 
-                    planId 
+                  fastify.log.info({
+                    tgId,
+                    orderId,
+                    planId
                   }, '[Webhook] ✅ Tickets awarded successfully');
                 } else {
-                  fastify.log.debug({ 
-                    tgId, 
-                    orderId 
+                  fastify.log.debug({
+                    tgId,
+                    orderId
                   }, '[Webhook] No tickets awarded (no referrer or outside contest period)');
                 }
               } catch (ticketError: any) {
                 // НЕ прерываем основной поток - оплата уже обработана
-                fastify.log.error({ 
+                fastify.log.error({
                   err: ticketError?.message,
                   stack: ticketError?.stack,
-                  tgId, 
-                  orderId 
+                  tgId,
+                  orderId
                 }, '[Webhook] ❌ Failed to award tickets (non-critical)');
-                
+
                 // ДОБАВЛЯЕМ В ОЧЕРЕДЬ ПОВТОРНЫХ ПОПЫТОК
                 awardRetryScheduler.addToRetryQueue(
                   tgId,
@@ -201,13 +201,13 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
               }
             } catch (ticketError: any) {
               // Общая ошибка при работе с базой бота или начислением
-              fastify.log.error({ 
+              fastify.log.error({
                 err: ticketError?.message,
                 stack: ticketError?.stack,
-                tgId, 
-                orderId 
+                tgId,
+                orderId
               }, '[Webhook] ❌ Error in ticket awarding flow (non-critical)');
-              
+
               // Пытаемся добавить в очередь, если можем извлечь данные
               try {
                 const orderCreatedAt = orderRow.created_at || new Date().toISOString();
@@ -231,10 +231,10 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
             await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               chat_id: tgId,
               text: `✅ <b>Оплата получена! Ваша подписка активирована.</b>\n\n` +
-                    `🟢 Статус: <b>Активна</b>\n` +
-                    `🕓 Действует до: <b>${expireDate}</b>\n\n` +
-                    `🔗 <b>Ваш ключ:</b>\n<code>${vlessKey}</code>\n\n` +
-                    `Используйте кнопки в боте для управления подключением.`,
+                `🟢 Статус: <b>Активна</b>\n` +
+                `🕓 Действует до: <b>${expireDate}</b>\n\n` +
+                `🔗 <b>Ваш ключ:</b>\n<code>${vlessKey}</code>\n\n` +
+                `Используйте кнопки в боте для управления подключением.`,
               parse_mode: 'HTML'
             }).catch(err => {
               fastify.log.error({ err: err.message, tgId }, 'Failed to send TG success message');
@@ -245,7 +245,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
 
         } catch (e: any) {
           fastify.log.error({ err: e.message, tgId, orderId }, '[Webhook] CRITICAL ACTIVATION ERROR');
-          
+
           // Уведомляем админа о сбое
           if (botToken) {
             // Получаем первый ADMIN_ID из переменной окружения
@@ -255,12 +255,12 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
               .map(id => parseInt(id.trim(), 10))
               .filter(id => Number.isFinite(id) && id > 0);
             const adminChatId = adminIds.length > 0 ? adminIds[0] : null;
-            
+
             if (adminChatId) {
               await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
                 chat_id: adminChatId,
                 text: `🚨 <b>ОШИБКА СОЗДАНИЯ КЛЮЧА</b>\nЮзер: ${tgId}\nОшибка: ${e.message}\n\nСрочно проверьте панель Marzban!`
-              }).catch(() => {});
+              }).catch(() => { });
             }
           }
         }
@@ -280,9 +280,16 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
       return reply.status(401).send({ error: 'Unauthorized' });
     }
 
-    const tgId = request.user.tgId;
+    const tgIdParamRaw = (request.query as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const tgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
+    if (!tgId) {
+      return reply.status(400).send({ error: 'Missing Telegram ID' });
+    }
+
     const userRef = `tg_${tgId}`;
-    
+
     // Получаем заказы из базы API
     const apiOrders = ordersRepo.getOrdersByUser(userRef);
 
@@ -384,9 +391,9 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
           amount: order.amount,
           currency: order.currency,
           date: order.date,
-          status: order.status === 'paid' || order.status === 'completed' ? 'success' as const : 
-                  order.status === 'pending' ? 'pending' as const : 
-                  'fail' as const,
+          status: order.status === 'paid' || order.status === 'completed' ? 'success' as const :
+            order.status === 'pending' ? 'pending' as const :
+              'fail' as const,
           planId: order.plan_id,
           planName,
         };
