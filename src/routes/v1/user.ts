@@ -81,13 +81,24 @@ export async function userRoutes(fastify: FastifyInstance) {
   fastify.post('/regenerate', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
+    // Admin mode: allow regenerating for an arbitrary tgId (service-to-service).
+    const tgIdParamRaw = (request.query as any)?.tgId || (request.body as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
+    if (!targetTgId) {
+      return reply.status(400).send({ error: 'Missing Telegram ID' });
+    }
+
+    fastify.log.info({ targetTgId, requester: request.user.tgId }, '[UserRegenerate] Regenerating key');
+
     // 1. Генерируем новый (Marzban + сохранение в vpn_keys БД)
-    const config = await marzbanService.regenerateUser(request.user.tgId);
+    const config = await marzbanService.regenerateUser(targetTgId);
 
     // 2. Также обновляем "замороженный" ключ в последнем оплаченном заказе (для совместимости)
     if (config) {
       const { getOrdersByUser, markPaidWithKey } = await import('../../storage/ordersRepo.js');
-      const userRef = `tg_${request.user.tgId}`;
+      const userRef = `tg_${targetTgId}`;
       const orders = getOrdersByUser(userRef);
       const lastPaidOrder = orders.find(o => o.status === 'paid');
 
