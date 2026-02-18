@@ -32,22 +32,40 @@ export class MarzbanService {
     }
   }
 
+  /**
+   * Возвращает ссылку. 
+   * Если в объекте пользователя есть subscription_url, используем его.
+   * subscription_url имеет формат /sub/..., поэтому просто добавляем proxy path
+   */
   private formatSubscriptionUrl(user: MarzbanUser): string {
     if (user.subscription_url) {
+      // subscription_url уже содержит /sub/..., добавляем только proxy path
       return `${this.publicUrl}${this.subscriptionPath}${user.subscription_url}`;
     }
+    // Если нет, берем первую из списка links
     return user.links?.[0] || '';
   }
 
+  /**
+   * ТОЛЬКО ЧТЕНИЕ ИЗ БД ИЛИ КЭША.
+   * Гарантирует отсутствие побочных эффектов.
+   */
   async getUserConfig(tgId: number): Promise<string | null> {
     const userRef = `tg_${tgId}`;
+    
+    // 1. Проверяем в нашей БД
     const cachedKey = keysRepo.getActiveKey(userRef);
-    if (cachedKey) return cachedKey.key;
+    if (cachedKey) {
+      return cachedKey.key;
+    }
 
+    // 2. Если в БД нет, тянем из Marzban (1 раз)
     const user = await this.findUser(tgId);
     if (!user) return null;
-
+    
     const url = this.formatSubscriptionUrl(user);
+    
+    // Сохраняем для будущих GET-запросов (Идемпотентность)
     if (url) {
       keysRepo.saveKey({
         userRef,
@@ -55,6 +73,7 @@ export class MarzbanService {
         key: url
       });
     }
+
     return url;
   }
 
@@ -63,8 +82,9 @@ export class MarzbanService {
     const userRef = `tg_${tgId}`;
     let user = await this.findUser(tgId);
     const expireDate = now + (days * 86400);
-
+    
     if (!user) {
+      console.log(`[MarzbanService] [WRITE] Creating user tg_${tgId}`);
       user = await this.client.createUser({
         username: `tg_${tgId}`,
         proxies: { vless: {} },
@@ -75,14 +95,19 @@ export class MarzbanService {
         note: `🇳🇱 Нидерланды [VLESS - tcp]`
       });
     } else {
+      // Обновляем ТОЛЬКО если подписка просрочена или нужно реально продлить
       const isExpired = !user.expire || user.expire < now;
+      
       if (isExpired || user.status !== 'active') {
+        console.log(`[MarzbanService] [WRITE] Renewing user ${user.username}`);
         user = await this.client.updateUser(user.username, {
           ...user,
           expire: expireDate,
           status: 'active'
         });
       } else {
+        // Если уже активен — просто продлеваем срок
+        console.log(`[MarzbanService] [WRITE] Adding time to user ${user.username}`);
         const newExpire = (user.expire || now) + (days * 86400);
         user = await this.client.updateUser(user.username, {
           ...user,
@@ -93,6 +118,18 @@ export class MarzbanService {
 
     if (!user) throw new Error('Failed to activate user');
     const url = this.formatSubscriptionUrl(user);
+
+    if (!url) {
+      console.error(`[MarzbanService] formatSubscriptionUrl returned empty for user ${user.username}`);
+      console.error(`[MarzbanService] User data:`, JSON.stringify({
+        subscription_url: user.subscription_url,
+        links: user.links,
+        username: user.username
+      }));
+      throw new Error('Failed to format subscription URL');
+    }
+
+    // Обновляем в нашей БД
     keysRepo.saveKey({
       userRef,
       marzbanUsername: user.username,
@@ -116,15 +153,21 @@ export class MarzbanService {
     const user = await this.findUser(tgId);
     if (!user) return null;
 
+    console.log(`[MarzbanService] [WRITE] ROTATE key for user: ${user.username} (tgId: ${tgId})`);
+    
+    // 1. Сброс токена в Marzban
     await this.client.request({
       method: 'post',
       url: `/api/user/${user.username}/reset`,
     });
 
+    // 2. Получаем обновленного пользователя
     const updatedUser = await this.findUser(tgId);
     if (!updatedUser) return null;
 
     const url = this.formatSubscriptionUrl(updatedUser);
+
+    // 3. Сохраняем новый ключ в БД (старый пометится как неактивный)
     keysRepo.saveKey({
       userRef,
       marzbanUsername: updatedUser.username,
@@ -132,56 +175,5 @@ export class MarzbanService {
     });
 
     return url;
-  }
-
-  async getUserDevices(tgId: number): Promise<any[]> {
-    const user = await this.findUser(tgId);
-    if (!user) return [];
-
-    const onlines = user.onlines || [];
-    const devices = onlines.map((session: any, index: number) => {
-      const ip = session.ip || 'Unknown';
-      return {
-        id: `dev_${index}_${ip.replace(/\./g, '_')}`,
-        type: this.detectDeviceType(null, ip),
-        name: `Устройство ${index + 1}`,
-        ip: ip,
-        location: 'Нидерланды',
-        lastActive: session.online_at || new Date().toISOString(),
-        status: 'online',
-        metadata: {
-          protocol: session.protocol || 'VLESS',
-        }
-      };
-    });
-
-    if (devices.length === 0 && user.online_at) {
-      devices.push({
-        id: 'last_active',
-        type: 'iPhone',
-        name: 'Последнее устройство',
-        ip: 'Скрыт',
-        location: 'Нидерланды',
-        lastActive: user.online_at,
-        status: 'offline',
-        metadata: {
-          protocol: 'VLESS',
-        }
-      });
-    }
-
-    return devices;
-  }
-
-  private detectDeviceType(userAgent: string | null, ip: string): string {
-    if (!userAgent) return 'iPhone';
-    const ua = userAgent.toLowerCase();
-    if (ua.includes('iphone')) return 'iPhone';
-    if (ua.includes('android')) return 'Android';
-    if (ua.includes('windows')) return 'Windows';
-    if (ua.includes('macintosh') || ua.includes('mac os')) return 'Mac';
-    if (ua.includes('ipad')) return 'iPad';
-    if (ua.includes('linux')) return 'Linux';
-    return 'iPhone';
   }
 }
