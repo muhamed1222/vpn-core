@@ -217,17 +217,35 @@ export async function userRoutes(fastify: FastifyInstance) {
         // Дополняем данными из Marzban (ноды, онлайн-статус)
         const marzbanInfo = await marzbanService.getDeviceInfo(targetTgId).catch(() => null);
 
-        return reply.send({
+        const response = {
           devices,
           nodes: marzbanInfo?.nodes || [],
           lastOnline: marzbanInfo?.lastOnline || dbDevices[0]?.last_seen || null,
           userAgent: marzbanInfo?.userAgent || dbDevices[0]?.user_agent || '',
           subUpdatedAt: marzbanInfo?.subUpdatedAt || null,
-        });
+        };
+
+        // LOGGING FOR DEBUG
+        fastify.log.info({
+          targetTgId,
+          devicesCount: response.devices.length,
+          nodesCount: response.nodes.length,
+          response
+        }, '[UserDevices] Returning device info');
+
+        return reply.send(response);
       }
 
       // Фолбэк: нет данных в device_connections → берём из Marzban
       const deviceInfo = await marzbanService.getDeviceInfo(targetTgId);
+
+      // LOGGING FOR DEBUG
+      fastify.log.info({
+        targetTgId,
+        source: 'marzban_fallback',
+        deviceInfo
+      }, '[UserDevices] Returning fallback device info');
+
       if (!deviceInfo) {
         return reply.send({ devices: [], nodes: [], lastOnline: null, userAgent: '', subUpdatedAt: null });
       }
