@@ -15,19 +15,19 @@ Backend API для VPN сервиса Outlivion с интеграцией Telegr
 
 ### 📁 Локальная документация (специфика VPN API):
 
-1. **[CONTEST_API.md](./CONTEST_API.md)**  
+1. **[CONTEST_API.md](../docs/08-services/vpn-core/CONTEST_API.md)**  
    API для конкурсной системы
 
-2. **[README_CONTEST.md](./README_CONTEST.md)**  
+2. **[README_CONTEST.md](../docs/08-services/vpn-core/README_CONTEST.md)**  
    Документация конкурсной механики
 
-3. **[ADMIN_API_KEY_SETUP.md](./ADMIN_API_KEY_SETUP.md)**  
+3. **[ADMIN_API_KEY_SETUP.md](../docs/08-services/vpn-core/ADMIN_API_KEY_SETUP.md)**  
    Настройка административного доступа
 
-4. **[DATABASE_MIGRATION_PLAN.md](./DATABASE_MIGRATION_PLAN.md)**  
+4. **[DATABASE_MIGRATION_PLAN.md](../docs/08-services/vpn-core/DATABASE_MIGRATION_PLAN.md)**  
    План миграции базы данных
 
-5. **[TECHNICAL_SPEC.md](./TECHNICAL_SPEC.md)**  
+5. **[TECHNICAL_SPEC.md](../docs/08-services/vpn-core/TECHNICAL_SPEC.md)**  
    Техническая спецификация (может быть устаревшей, см. центральную docs/)
 
 ### 📦 Архив:
@@ -125,7 +125,7 @@ npm start
 - `GET /v1/admin/contest/:contestId/participants` - Участники конкурса
 - `GET /v1/admin/award-retry-stats` - Статистика начисления билетов
 
-Полная документация: [CONTEST_API.md](./CONTEST_API.md)
+Полная документация: [CONTEST_API.md](../docs/08-services/vpn-core/CONTEST_API.md)
 
 ---
 
