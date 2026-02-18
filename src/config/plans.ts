@@ -1,4 +1,4 @@
-// Конфигурация планов и их цен (синхронизировано с vpn-bot)
+// Конфигурация планов и их цен (синхронизировано с VPN Bot)
 export const PLAN_PRICES: Record<string, { value: string; stars: number; currency: string }> = {
   'plan_7': {
     value: '10.00',

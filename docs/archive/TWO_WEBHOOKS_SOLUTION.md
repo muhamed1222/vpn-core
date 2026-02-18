@@ -135,7 +135,7 @@ ssh root@72.56.93.135 "grep -rn 'vpn.outlivion.space' /root/vpn-bot/ | grep webh
 **2. Если найдется файл:**
 - Открыть файл
 - Заменить `vpn.outlivion.space/webhook/payment/yukassa` на `api.outlivion.space/v1/payments/webhook`
-- Перезапустить бота: `systemctl restart vpn-bot`
+- Перезапустить бота: `systemctl restart VPN Bot`
 
 **3. Повторить тест оплаты**
 
@@ -198,7 +198,7 @@ https://api.outlivion.space/v1/payments/webhook
 
 ```bash
 # 1. Следить за логами API
-ssh root@72.56.93.135 "journalctl -u vpn-core.service -f"
+ssh root@72.56.93.135 "journalctl -u VPN API.service -f"
 
 # 2. Сделать покупку через бота (YooKassa)
 # 3. Посмотреть логи - должно быть:

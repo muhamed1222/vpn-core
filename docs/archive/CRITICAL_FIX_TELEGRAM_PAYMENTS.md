@@ -78,7 +78,7 @@ bot.on('successful_payment', async (ctx) => {
 ### Шаг 2: Перезапущен бот
 
 ```bash
-systemctl restart vpn-bot
+systemctl restart VPN Bot
 ```
 
 **Статус:** ✅ Бот работает (PID: 758053, время: 04:52:29 UTC)
@@ -190,7 +190,7 @@ ssh root@72.56.93.135 "grep -i 'webhook' /root/vpn-bot/bot.log | tail -10"
 ```bash
 # Переключиться на Polling
 echo "TELEGRAM_USE_POLLING=1" >> /root/vpn-bot/.env
-systemctl restart vpn-bot
+systemctl restart VPN Bot
 ```
 
 ---

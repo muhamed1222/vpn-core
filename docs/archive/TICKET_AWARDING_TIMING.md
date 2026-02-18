@@ -221,7 +221,7 @@ T+5min:  ✅ БИЛЕТЫ НАЧИСЛЕНЫ (при успехе)
 
 ### 1. Проверить логи API
 ```bash
-ssh root@72.56.93.135 "journalctl -u vpn-core --since '10 minutes ago' --no-pager | grep -i 'award\|ticket'"
+ssh root@72.56.93.135 "journalctl -u VPN API --since '10 minutes ago' --no-pager | grep -i 'award\|ticket'"
 ```
 
 **Что искать:**
@@ -231,7 +231,7 @@ ssh root@72.56.93.135 "journalctl -u vpn-core --since '10 minutes ago' --no-page
 
 ### 2. Проверить логи бота
 ```bash
-ssh root@72.56.93.135 "journalctl --since '10 minutes ago' --no-pager | grep 'vpn-bot\|ContestService\|awardTickets'"
+ssh root@72.56.93.135 "journalctl --since '10 minutes ago' --no-pager | grep 'VPN Bot\|ContestService\|awardTickets'"
 ```
 
 ### 3. Проверить очередь повторов
@@ -300,7 +300,7 @@ ssh root@72.56.93.135 "sqlite3 /root/vpn-bot/data/database.sqlite 'SELECT * FROM
 
 1. **Проверьте логи API:**
    ```bash
-   journalctl -u vpn-core -n 100 | grep -i 'award\|ticket'
+   journalctl -u VPN API -n 100 | grep -i 'award\|ticket'
    ```
 
 2. **Проверьте логи бота:**

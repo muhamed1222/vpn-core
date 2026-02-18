@@ -1,4 +1,4 @@
-# Быстрая синхронизация vpn-core на сервер
+# Быстрая синхронизация VPN API на сервер
 
 ## Файлы для синхронизации:
 1. `src/auth/telegram.ts` (5.1K)
@@ -24,8 +24,8 @@ scp src/routes/v1/auth.ts root@72.56.93.135:/root/vpn-core/src/routes/v1/auth.ts
 ssh root@72.56.93.135
 cd /root/vpn-core
 npm run build
-pm2 restart vpn-core
-pm2 logs vpn-core --lines 20
+pm2 restart VPN API
+pm2 logs VPN API --lines 20
 ```
 
 ## Что изменилось:

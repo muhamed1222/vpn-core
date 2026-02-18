@@ -8,7 +8,7 @@
 
 1. Убедитесь, что конкурс создан в базе данных:
    ```bash
-   cd vpn-bot
+   cd VPN Bot
    npx tsx scripts/create_contest.ts
    ```
 

@@ -251,11 +251,11 @@ ssh root@72.56.93.135 "cd /opt/vpn-core && npm install"
 ssh root@72.56.93.135 "cd /opt/vpn-core && npm run build"
 
 # 4. На сервере - перезапуск
-ssh root@72.56.93.135 "systemctl restart vpn-core"
+ssh root@72.56.93.135 "systemctl restart VPN API"
 
 # 5. Проверка
-ssh root@72.56.93.135 "systemctl status vpn-core"
-ssh root@72.56.93.135 "journalctl -u vpn-core -n 50 | grep -i scheduler"
+ssh root@72.56.93.135 "systemctl status VPN API"
+ssh root@72.56.93.135 "journalctl -u VPN API -n 50 | grep -i scheduler"
 ```
 
 ---

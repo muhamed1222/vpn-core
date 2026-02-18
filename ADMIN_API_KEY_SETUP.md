@@ -22,7 +22,7 @@ openssl rand -base64 32
 echo "ADMIN_API_KEY=your-generated-key-here" >> /opt/vpn-core/.env
 
 # Перезапустите API
-sudo systemctl restart vpn-core
+sudo systemctl restart VPN API
 ```
 
 ### 2. На фронтенде (Vercel или сервер)
@@ -60,4 +60,4 @@ openssl rand -base64 32
 
 1. Проверьте, что ключ одинаковый на бэкенде и фронтенде
 2. Проверьте, что API сервер перезапущен
-3. Проверьте логи API: `journalctl -u vpn-core -n 50`
+3. Проверьте логи API: `journalctl -u VPN API -n 50`

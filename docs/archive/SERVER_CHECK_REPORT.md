@@ -12,7 +12,7 @@
 **Статус:** ✅ **ACTIVE (RUNNING)**
 
 ```
-● vpn-core.service - Outlivion API
+● VPN API.service - Outlivion API
    Active: active (running) since Sun 2026-01-18 02:04:36 UTC; 1h 40min ago
    Main PID: 738935 (node)
    Memory: 29.4M
@@ -88,7 +88,7 @@ ls -la /opt/vpn-core/dist/services/
 **Требуется:**
 1. Синхронизация новых файлов на сервер
 2. Пересборка проекта (`npm run build`)
-3. Перезапуск сервиса (`systemctl restart vpn-core`)
+3. Перезапуск сервиса (`systemctl restart VPN API`)
 
 ---
 
@@ -142,10 +142,10 @@ rsync -avz --exclude 'node_modules' --exclude '.git' \
 cd /opt/vpn-core
 npm install  # Установит node-cron
 npm run build
-systemctl restart vpn-core
+systemctl restart VPN API
 
 # Проверка
-journalctl -u vpn-core -n 50 | grep -i scheduler
+journalctl -u VPN API -n 50 | grep -i scheduler
 ```
 
 ---
@@ -161,7 +161,7 @@ journalctl -u vpn-core -n 50 | grep -i scheduler
    - Проверять очередь повторов через `/v1/admin/award-retry-stats` (после применения изменений)
 
 3. **Профилактика:**
-   - Регулярно проверять логи: `journalctl -u vpn-core -n 100`
+   - Регулярно проверять логи: `journalctl -u VPN API -n 100`
    - Мониторить использование памяти и CPU
    - Проверять доступность базы данных
 

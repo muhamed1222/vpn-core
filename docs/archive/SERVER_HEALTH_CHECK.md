@@ -12,9 +12,9 @@
 
 **Команды для проверки:**
 ```bash
-systemctl status vpn-core
+systemctl status VPN API
 curl http://localhost:3001/
-journalctl -u vpn-core -n 50
+journalctl -u VPN API -n 50
 ```
 
 **Что должно быть:**
@@ -85,9 +85,9 @@ ls -la /opt/vpn-core/dist/routes/v1/*.js
 
 **Решение:**
 ```bash
-sudo systemctl restart vpn-core
-sudo systemctl status vpn-core
-journalctl -u vpn-core -n 100
+sudo systemctl restart VPN API
+sudo systemctl status VPN API
+journalctl -u VPN API -n 100
 ```
 
 ### Проблема: Нет файлов после деплоя
@@ -97,7 +97,7 @@ journalctl -u vpn-core -n 100
 cd /opt/vpn-core
 git pull
 npm run build
-sudo systemctl restart vpn-core
+sudo systemctl restart VPN API
 ```
 
 ### Проблема: База данных недоступна

@@ -118,13 +118,13 @@ nano /root/vpn-core/src/routes/v1/payments.ts
 
 ### 3. Перезапустить API
 ```bash
-systemctl restart vpn-core
-systemctl status vpn-core
+systemctl restart VPN API
+systemctl status VPN API
 ```
 
 ### 4. Проверить логи
 ```bash
-journalctl -u vpn-core -f
+journalctl -u VPN API -f
 ```
 
 ---
@@ -137,7 +137,7 @@ journalctl -u vpn-core -f
 2. Дождаться webhook от YooKassa (~5-10 сек)
 3. Проверить логи API:
    ```bash
-   journalctl -u vpn-core -n 50 | grep -A 10 'Webhook'
+   journalctl -u VPN API -n 50 | grep -A 10 'Webhook'
    ```
 4. Должно появиться: `[Webhook] Order found in bot database`
 5. Проверить в боте: подписка должна продлиться автоматически

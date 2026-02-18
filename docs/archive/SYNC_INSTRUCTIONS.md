@@ -1,4 +1,4 @@
-# Инструкция по синхронизации изменений vpn-core на сервер
+# Инструкция по синхронизации изменений VPN API на сервер
 
 ## Изменения
 1. **src/auth/telegram.ts** - добавлен `photo_url` в интерфейс `TelegramUser`
@@ -19,7 +19,7 @@ scp src/routes/v1/auth.ts root@72.56.93.135:/root/vpn-core/src/routes/v1/auth.ts
 ssh root@72.56.93.135
 cd /root/vpn-core
 npm run build
-pm2 restart vpn-core
+pm2 restart VPN API
 ```
 
 Или если pm2 не установлен:
@@ -31,7 +31,7 @@ npm start &
 ## Проверка
 После перезапуска проверьте логи:
 ```bash
-pm2 logs vpn-core --lines 20
+pm2 logs VPN API --lines 20
 ```
 
 Или проверьте, что API отвечает:

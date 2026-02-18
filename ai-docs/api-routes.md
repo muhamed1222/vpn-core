@@ -28,7 +28,7 @@ API поддерживает три способа аутентификации:
 ```json
 {
   "ok": true,
-  "service": "vpn-core"
+  "service": "VPN API"
 }
 ```
 

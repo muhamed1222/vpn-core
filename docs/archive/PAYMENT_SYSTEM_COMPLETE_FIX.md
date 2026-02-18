@@ -209,7 +209,7 @@ GROUP BY referrer_id;
 
 ```bash
 # Логи API
-journalctl -u vpn-core --since '1 minute ago' | grep -E '\[Webhook\]'
+journalctl -u VPN API --since '1 minute ago' | grep -E '\[Webhook\]'
 
 # Проверка заказа
 sqlite3 /root/vpn-bot/data/database.sqlite "

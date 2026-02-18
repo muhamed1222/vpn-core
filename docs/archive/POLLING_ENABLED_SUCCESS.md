@@ -50,7 +50,7 @@ console.log("[TELEGRAM_PAYMENT] ✅ processPayment completed successfully for or
 
 **Статус сервиса:**
 ```
-● vpn-bot.service - vpn-bot Service
+● VPN Bot.service - VPN Bot Service
      Active: active (running)
      Tasks: 28
      Memory: 83.5M
@@ -182,7 +182,7 @@ WHERE referrer_id = 782245481
 
 **1. Проверить, запущен ли бот:**
 ```bash
-ssh root@72.56.93.135 "systemctl status vpn-bot"
+ssh root@72.56.93.135 "systemctl status VPN Bot"
 ```
 
 **2. Проверить, читает ли бот .env:**
@@ -201,7 +201,7 @@ ssh root@72.56.93.135 "grep 'DEBUG.*TELEGRAM_USE_POLLING' /root/vpn-bot/bot.log 
 
 **Если не отвечает:**
 ```bash
-ssh root@72.56.93.135 "journalctl -u vpn-bot -n 50"
+ssh root@72.56.93.135 "journalctl -u VPN Bot -n 50"
 ```
 
 ---

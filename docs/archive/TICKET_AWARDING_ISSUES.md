@@ -98,8 +98,8 @@ if (planId === 'plan_7') {
 
 1. **Проверить логи:**
    ```bash
-   journalctl -u vpn-bot.service | grep -iE 'awardSelfPurchaseTicket|Contest.*not active|Order.*created before'
-   journalctl -u vpn-core.service | grep -iE 'awardTicketsForPayment|outside contest period'
+   journalctl -u VPN Bot.service | grep -iE 'awardSelfPurchaseTicket|Contest.*not active|Order.*created before'
+   journalctl -u VPN API.service | grep -iE 'awardTicketsForPayment|outside contest period'
    ```
 
 2. **Проверить активный конкурс:**

@@ -1,4 +1,4 @@
-# 🚀 vpn-web API
+# 🚀 Outlivion VPN API
 
 Backend API для VPN сервиса Outlivion с интеграцией Telegram бота, платежных систем и конкурсной механики.
 
@@ -13,7 +13,7 @@ Backend API для VPN сервиса Outlivion с интеграцией Telegr
 - [`03-flows/`](../docs/03-flows/) - потоки данных и процессы
 - [`04-apis/`](../docs/04-apis/) - API спецификации
 
-### 📁 Локальная документация (специфика vpn-core):
+### 📁 Локальная документация (специфика VPN API):
 
 1. **[CONTEST_API.md](./CONTEST_API.md)**  
    API для конкурсной системы
@@ -186,7 +186,7 @@ npm start
 
 ## 📞 Контакты
 
-- **Telegram Bot:** @vpn-web_bot
+- **Telegram Bot:** @Outlivion VPN_bot
 - **Website:** https://my.outlivion.space
 - **VPN Domain:** https://vpn.outlivion.space
 

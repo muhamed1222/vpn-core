@@ -121,19 +121,19 @@ DELETE FROM ticket_ledger WHERE contest_id LIKE 'test-%';
 
 ### Проверить активные конкурсы:
 ```bash
-cd vpn-core
+cd VPN API
 BOT_DATABASE_PATH="/path/to/vpn-bot/data/database.sqlite" npx tsx scripts/check-contest.ts
 ```
 
 ### Деактивировать тестовые конкурсы:
 ```bash
-cd vpn-bot
+cd VPN Bot
 sqlite3 data/database.sqlite "UPDATE contests SET is_active = 0 WHERE id LIKE 'test-%' OR title LIKE '%Тестовый%';"
 ```
 
 ### Проверить статистику по основному конкурсу:
 ```bash
-cd vpn-bot
+cd VPN Bot
 sqlite3 data/database.sqlite "SELECT COUNT(*) FROM ref_events WHERE contest_id = '550e8400-e29b-41d4-a716-446655440000';"
 sqlite3 data/database.sqlite "SELECT COUNT(*), SUM(delta) FROM ticket_ledger WHERE contest_id = '550e8400-e29b-41d4-a716-446655440000';"
 ```

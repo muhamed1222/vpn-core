@@ -25,7 +25,7 @@ export interface VerifyAuthOptions {
 /**
  * Middleware для проверки авторизации
  * Поддерживает три способа:
- * 1. Admin API Key (x-admin-api-key) - для сервисов (vpn-bot)
+ * 1. Admin API Key (x-admin-api-key) - для сервисов (VPN Bot)
  * 2. Cookie-based auth (JWT в cookie) - для браузера
  * 3. initData в Authorization header - для Mini App
  */
@@ -36,7 +36,7 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
     request: FastifyRequest,
     reply: FastifyReply
   ): Promise<void> {
-    // Вариант 1: Admin API Key (для vpn-bot)
+    // Вариант 1: Admin API Key (для VPN Bot)
     const apiKey = request.headers['x-admin-api-key'];
     if (adminApiKey && apiKey === adminApiKey) {
       request.user = { isAdmin: true, tgId: 0 }; // tgId 0 для админа (заглушка)
@@ -58,7 +58,7 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
       }
     }
 
-    // Вариант 3: initData в Authorization header (для vpn-tg-app)
+    // Вариант 3: initData в Authorization header (для VPN Website)
     const initData = request.headers.authorization;
     if (initData && botToken) {
       try {

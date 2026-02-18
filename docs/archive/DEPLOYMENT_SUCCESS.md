@@ -60,7 +60,7 @@ ls -la /opt/vpn-core/dist/services/
 **Статус:** ✅ **УСПЕШНО**
 
 ```
-● vpn-core.service - Outlivion API
+● VPN API.service - Outlivion API
    Active: active (running) since Sun 2026-01-18 03:50:34 UTC
    Main PID: 752270 (node)
    Memory: 35.3M
@@ -164,10 +164,10 @@ curl -H "Authorization: Bearer YOUR_TOKEN" \
 
 ```bash
 # Следить за логами планировщика
-journalctl -u vpn-core -f | grep -i scheduler
+journalctl -u VPN API -f | grep -i scheduler
 
 # Проверка ошибок начисления
-journalctl -u vpn-core -f | grep -i "award\|ticket"
+journalctl -u VPN API -f | grep -i "award\|ticket"
 ```
 
 ### 3. Проверка работы транзакций

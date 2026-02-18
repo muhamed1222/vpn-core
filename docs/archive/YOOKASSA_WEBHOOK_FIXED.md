@@ -115,7 +115,7 @@ Telegram Bot API (polling)
 
 **Как проверить логи:**
 ```bash
-ssh root@72.56.93.135 "journalctl -u vpn-core.service -f | grep -E 'webhook|payment|ticket|award'"
+ssh root@72.56.93.135 "journalctl -u VPN API.service -f | grep -E 'webhook|payment|ticket|award'"
 ```
 
 ---
@@ -235,13 +235,13 @@ WHERE referrer_id = 782245481
 
 **1. Проверить логи API:**
 ```bash
-ssh root@72.56.93.135 "journalctl -u vpn-core.service -n 100 | grep -E 'webhook|payment'"
+ssh root@72.56.93.135 "journalctl -u VPN API.service -n 100 | grep -E 'webhook|payment'"
 ```
 
 **Если логов нет:**
 - Проверьте URL в YooKassa кабинете еще раз
 - Убедитесь, что `payment.succeeded` включен
-- Проверьте, что API сервер работает: `systemctl status vpn-core.service`
+- Проверьте, что API сервер работает: `systemctl status VPN API.service`
 
 **2. Проверить последний заказ:**
 ```bash
@@ -283,8 +283,8 @@ ssh root@72.56.93.135 "tail -100 /root/vpn-bot/bot.log | grep TELEGRAM_PAYMENT"
 
 **Если логов нет:**
 - Проверьте, что Polling включен: `grep TELEGRAM_USE_POLLING /root/vpn-bot/.env`
-- Перезапустите бота: `systemctl restart vpn-bot`
-- Проверьте статус: `systemctl status vpn-bot`
+- Перезапустите бота: `systemctl restart VPN Bot`
+- Проверьте статус: `systemctl status VPN Bot`
 
 **2. Проверить последний заказ и начислить вручную** (см. выше)
 

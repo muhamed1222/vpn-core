@@ -79,7 +79,7 @@ BOT_DATABASE_PATH=/opt/vpn-bot/data/database.sqlite
    ```
 2. Перезапустить сервис:
    ```bash
-   sudo systemctl restart vpn-core
+   sudo systemctl restart VPN API
    ```
 
 ---
@@ -113,7 +113,7 @@ ls -la $(grep BOT_DATABASE_PATH /opt/vpn-core/.env | cut -d'=' -f2)
 ```bash
 # На сервере
 # Узнать пользователя, от которого запускается API
-sudo systemctl show vpn-core | grep User
+sudo systemctl show VPN API | grep User
 
 # Проверить права
 sudo -u outlivion ls -la /root/vpn-bot/data/database.sqlite
@@ -185,7 +185,7 @@ sqlite3 /root/vpn-bot/data/database.sqlite "SELECT id, title, is_active, starts_
 **Проверка:**
 ```bash
 # На сервере
-sudo journalctl -u vpn-core -n 100 --no-pager | grep -E "(Contest|Referral|BOT_DATABASE)"
+sudo journalctl -u VPN API -n 100 --no-pager | grep -E "(Contest|Referral|BOT_DATABASE)"
 ```
 
 **Что искать:**
@@ -245,13 +245,13 @@ curl -X GET "http://localhost:3001/v1/contest/active" \
 
 - [ ] **API сервер перезапущен после изменений**
   ```bash
-  sudo systemctl restart vpn-core
-  sudo systemctl status vpn-core
+  sudo systemctl restart VPN API
+  sudo systemctl status VPN API
   ```
 
 - [ ] **Роуты конкурса зарегистрированы (проверить логи)**
   ```bash
-  sudo journalctl -u vpn-core -n 50 | grep -E "(Contest|Referral) routes registered"
+  sudo journalctl -u VPN API -n 50 | grep -E "(Contest|Referral) routes registered"
   ```
 
 ---
@@ -268,7 +268,7 @@ curl -X GET "http://localhost:3001/v1/contest/active" \
 echo "BOT_DATABASE_PATH=/root/vpn-bot/data/database.sqlite" >> /opt/vpn-core/.env
 
 # Перезапустить
-sudo systemctl restart vpn-core
+sudo systemctl restart VPN API
 ```
 
 ---
@@ -299,7 +299,7 @@ sqlite3 /root/vpn-bot/data/database.sqlite "SELECT * FROM contests WHERE is_acti
 sqlite3 /root/vpn-bot/data/database.sqlite ".schema contests"
 
 # Если таблицы нет, перезапустить бота (он создаст таблицы)
-sudo systemctl restart vpn-bot
+sudo systemctl restart VPN Bot
 ```
 
 ---
@@ -311,7 +311,7 @@ sudo systemctl restart vpn-bot
 **Решение:**
 ```bash
 # Узнать пользователя API
-sudo systemctl show vpn-core | grep User
+sudo systemctl show VPN API | grep User
 
 # Дать права
 sudo chmod 644 /root/vpn-bot/data/database.sqlite
@@ -328,7 +328,7 @@ sudo chown outlivion:outlivion /root/vpn-bot/data/database.sqlite
 **Решение:**
 ```bash
 # Проверить логи
-sudo journalctl -u vpn-core -n 100 | grep -i error
+sudo journalctl -u VPN API -n 100 | grep -i error
 
 # Проверить, что файлы существуют
 ls -la /opt/vpn-core/dist/routes/v1/contest.js
@@ -337,7 +337,7 @@ ls -la /opt/vpn-core/dist/routes/v1/referral.js
 # Пересобрать проект
 cd /opt/vpn-core
 npm run build
-sudo systemctl restart vpn-core
+sudo systemctl restart VPN API
 ```
 
 ---

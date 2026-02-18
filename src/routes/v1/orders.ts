@@ -241,7 +241,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
             },
             items: [
               {
-                description: `vpn-web plan: ${planId}`,
+                description: `Outlivion VPN plan: ${planId}`,
                 quantity: '1.00',
                 amount: {
                   value: amount.value,

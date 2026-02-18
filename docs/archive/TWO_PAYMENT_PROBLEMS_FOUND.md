@@ -47,7 +47,7 @@
 #### Анализ логов API:
 ```bash
 # Поиск webhook за последние 30 минут
-journalctl -u vpn-core.service --since '30 minutes ago' | grep -E 'webhook|payment'
+journalctl -u VPN API.service --since '30 minutes ago' | grep -E 'webhook|payment'
 ```
 
 **Результат:** ПУСТО (0 записей) ❌
@@ -144,7 +144,7 @@ location /v1/payments/webhook {
 
 **Проверка статуса API:**
 ```bash
-ssh root@72.56.93.135 "systemctl status vpn-core.service"
+ssh root@72.56.93.135 "systemctl status VPN API.service"
 ```
 
 **Должно быть:**

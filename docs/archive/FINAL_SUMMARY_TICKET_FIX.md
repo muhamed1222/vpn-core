@@ -75,7 +75,7 @@
 
 4. Бот перезапущен:
    ```bash
-   systemctl restart vpn-bot
+   systemctl restart VPN Bot
    ```
 
 #### Результат:
@@ -123,7 +123,7 @@
 | YooKassa Webhook | ❌ Не настроен | Требует конфигурации в YooKassa |
 | Ручное начисление | ✅ Работает | 16 билетов начислено |
 | База данных | ✅ Работает | Все заказы в БД |
-| API сервер | ✅ Работает | vpn-core активен |
+| API сервер | ✅ Работает | VPN API активен |
 | Contest система | ✅ Работает | Конкурс активен |
 
 ---
@@ -215,8 +215,8 @@ ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log"
 Должны появиться строки с `[TELEGRAM_PAYMENT]`
 
 **3. Если логов нет:**
-- Проверить, запущен ли бот: `systemctl status vpn-bot`
-- Перезапустить бот: `systemctl restart vpn-bot`
+- Проверить, запущен ли бот: `systemctl status VPN Bot`
+- Перезапустить бот: `systemctl restart VPN Bot`
 - Проверить, отвечает ли бот на `/start`
 
 ---
@@ -238,7 +238,7 @@ curl -X POST https://api.outlivion.space/v1/payments/webhook \
 
 **3. Проверить логи API:**
 ```bash
-ssh root@72.56.93.135 "journalctl -u vpn-core.service -f"
+ssh root@72.56.93.135 "journalctl -u VPN API.service -f"
 ```
 После оплаты через YooKassa должны появиться логи webhook
 

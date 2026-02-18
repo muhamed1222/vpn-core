@@ -72,7 +72,7 @@ function checkContest(): void {
 
     if (allContests.length === 0) {
       console.warn('   ⚠️  В базе нет конкурсов');
-      console.log('   💡 Создайте конкурс с помощью: cd vpn-bot && npx tsx scripts/create_contest.ts');
+      console.log('   💡 Создайте конкурс с помощью: cd VPN Bot && npx tsx scripts/create_contest.ts');
     } else {
       console.log(`   📊 Найдено конкурсов: ${allContests.length}`);
       

@@ -217,10 +217,10 @@ TELEGRAM_USE_POLLING=1
 
 ### Сервисы:
 ```bash
-# vpn-bot
-systemctl status vpn-bot
-systemctl restart vpn-bot
-journalctl -u vpn-bot -f
+# VPN Bot
+systemctl status VPN Bot
+systemctl restart VPN Bot
+journalctl -u VPN Bot -f
 
 # Nginx
 systemctl status nginx
@@ -320,7 +320,7 @@ grep "YuKassa Webhook" /root/vpn-bot/bot.log
 
 ## 📞 КОНТАКТЫ
 
-**Бот:** @vpn-web_bot  
+**Бот:** @Outlivion VPN_bot  
 **Сайт:** https://my.outlivion.space  
 **VPN Домен:** https://vpn.outlivion.space
 

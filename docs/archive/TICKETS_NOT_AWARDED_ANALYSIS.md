@@ -46,7 +46,7 @@ ticket_ord_5903a2e6... | 02:08:01 | SELF_PURCHASE
 ### 4. Статус бота
 
 ```bash
-● vpn-bot.service - vpn-bot Service
+● VPN Bot.service - VPN Bot Service
      Active: active (running) since Sun 2026-01-18 03:12:01 UTC
 ```
 
@@ -55,7 +55,7 @@ ticket_ord_5903a2e6... | 02:08:01 | SELF_PURCHASE
 
 ---
 
-### 5. Логи API (vpn-core)
+### 5. Логи API (VPN API)
 
 **Запросы за последние 2 часа:**
 - ✅ API работает нормально
@@ -224,8 +224,8 @@ export async function processPayment(order: Order): Promise<void> {
 ```bash
 cd /root/vpn-bot
 npm run build
-systemctl restart vpn-bot
-journalctl -u vpn-bot -f
+systemctl restart VPN Bot
+journalctl -u VPN Bot -f
 ```
 
 #### Шаг 3: Протестировать покупку
@@ -233,7 +233,7 @@ journalctl -u vpn-bot -f
 1. Купить тестовую подписку через бота
 2. Проверить логи:
    ```bash
-   journalctl -u vpn-bot -n 50 --no-pager | grep "OrderProcessing"
+   journalctl -u VPN Bot -n 50 --no-pager | grep "OrderProcessing"
    ```
 3. Проверить начисление:
    ```bash

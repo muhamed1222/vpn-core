@@ -146,7 +146,7 @@ model Referral {
 ## 3. Этапы миграции
 
 ### Этап 1: Подготовка (Локально)
-1.  Создать папку `packages/database` (или в `vpn-core`).
+1.  Создать папку `packages/database` (или в `VPN API`).
 2.  Инициализировать Prisma: `npx prisma init`.
 3.  Создать `docker-compose.yml` с Postgres.
 4.  Применить схему: `npx prisma db push`.
@@ -167,7 +167,7 @@ model Referral {
     *   Заменить `better-sqlite3` на `PrismaClient`.
     *   Удалить код с `ATTACH DATABASE`.
     *   Переписать репозитории (`ordersRepo.ts`, `keysRepo.ts`).
-2.  **vpn-bot:**
+2.  **VPN Bot:**
     *   Заменить `better-sqlite3` на `PrismaClient`.
     *   Переписать сервисы (`userService.ts`, `orderService.ts`).
 

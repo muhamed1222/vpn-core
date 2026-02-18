@@ -91,7 +91,7 @@ ssh root@72.56.93.135 "tail -f /root/vpn-bot/bot.log | grep --line-buffered TELE
 ### Для YooKassa:
 
 ```bash
-ssh root@72.56.93.135 "journalctl -u vpn-core.service -f | grep --line-buffered -E 'webhook|payment|ticket'"
+ssh root@72.56.93.135 "journalctl -u VPN API.service -f | grep --line-buffered -E 'webhook|payment|ticket'"
 ```
 
 **Ожидаемые логи:**
@@ -142,8 +142,8 @@ WHERE referrer_id = 782245481
 
 2. **Если логов нет:**
    - Бот не получил событие
-   - Проверить статус: `systemctl status vpn-bot`
-   - Перезапустить: `systemctl restart vpn-bot`
+   - Проверить статус: `systemctl status VPN Bot`
+   - Перезапустить: `systemctl restart VPN Bot`
 
 3. **Начислить вручную:**
    ```bash
@@ -176,7 +176,7 @@ WHERE referrer_id = 782245481
 
 1. **Проверить логи API:**
    ```bash
-   ssh root@72.56.93.135 "journalctl -u vpn-core.service -n 100 | grep webhook"
+   ssh root@72.56.93.135 "journalctl -u VPN API.service -n 100 | grep webhook"
    ```
 
 2. **Если webhook не пришел:**
@@ -209,7 +209,7 @@ WHERE referrer_id = 782245481
 |-----------|--------|
 | Бот работает | ✅ Да (PID: 759042) |
 | Polling включен | ✅ Да (`TELEGRAM_USE_POLLING=1`) |
-| API работает | ✅ Да (vpn-core активен) |
+| API работает | ✅ Да (VPN API активен) |
 | YooKassa webhook URL | ✅ Да (`api.outlivion.space/v1/payments/webhook`) |
 | YooKassa события | ✅ Да (`payment.succeeded`) |
 | Билеты в БД | ✅ 16 |

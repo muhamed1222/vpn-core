@@ -289,7 +289,7 @@ cd /root/vpn-core && npm run build
 
 ### 3. API перезапущен
 ```bash
-systemctl restart vpn-core
+systemctl restart VPN API
 ```
 **PID:** 772798  
 **Порт:** 127.0.0.1:3001  

@@ -36,7 +36,7 @@
 └────────────────────────────────────────────────────────────────┘
                                ↓
 ┌────────────────────────────────────────────────────────────────┐
-│ 4. BACKEND API (vpn-core)                                       │
+│ 4. BACKEND API (VPN API)                                       │
 │    Файл: vpn-core/src/routes/v1/referral.ts                    │
 │    ↓                                                            │
 │    SELECT * FROM ticket_ledger WHERE tg_id = ... ← Чтение БД  │

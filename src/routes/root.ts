@@ -4,7 +4,7 @@ export async function rootRoutes(fastify: FastifyInstance) {
   fastify.get('/', async (request, reply) => {
     return {
       ok: true,
-      service: 'vpn-core',
+      service: 'VPN API',
     };
   });
 }

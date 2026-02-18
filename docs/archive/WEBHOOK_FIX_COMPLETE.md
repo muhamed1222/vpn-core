@@ -98,7 +98,7 @@ if (!orderRow) {
 
 ### 3. **API перезапущен**
 ```bash
-systemctl restart vpn-core
+systemctl restart VPN API
 ```
 
 **Статус:** ✅ active (running)  
@@ -157,7 +157,7 @@ API получает event: payment.succeeded
 
 ```bash
 # Логи API (webhook обработка)
-journalctl -u vpn-core -f | grep -E 'Webhook|bot database'
+journalctl -u VPN API -f | grep -E 'Webhook|bot database'
 
 # Ожидаемый лог после успешного webhook:
 # [Webhook] Order found in bot database
@@ -253,7 +253,7 @@ https://api.outlivion.space/v1/payments/webhook
    - Убедиться что всё работает автоматически
 
 2. ✅ **Мониторинг**
-   - Следить за логами API: `journalctl -u vpn-core -f`
+   - Следить за логами API: `journalctl -u VPN API -f`
    - Проверять webhook обработку
 
 3. ✅ **Документация**
