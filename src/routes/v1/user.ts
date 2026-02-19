@@ -96,6 +96,40 @@ export async function userRoutes(fastify: FastifyInstance) {
     if (!request.user.isAdmin) return reply.status(403).send({ error: 'Forbidden' });
     const { tgId, days } = request.body;
     const success = await marzbanService.renewUser(tgId, days);
+
+    if (success) {
+      // Уведомляем бота об успешном продлении (best effort, не ждем)
+      // Это нужно, чтобы бот отправил сообщение пользователю и обновил свою локальную SQLite
+      const BOT_API_URL = process.env.BOT_API_URL || 'http://127.0.0.1:3000';
+      const adminApiKey = process.env.ADMIN_API_KEY || '';
+
+      // Сопоставляем дни с ID тарифа в боте
+      let planId = `plan_${days}`;
+      if (days > 25 && days < 35) planId = 'plan_30';
+      else if (days > 80 && days < 100) planId = 'plan_90';
+      else if (days > 170 && days < 190) planId = 'plan_180';
+      else if (days > 350) planId = 'plan_365';
+
+      import('axios').then(async (axiosLib) => {
+        const axios = axiosLib.default || axiosLib;
+        try {
+          await axios.post(`${BOT_API_URL}/api/internal/activate-external-order`, {
+            tgId,
+            planId,
+            orderId: `core_${Date.now()}_${tgId}`
+          }, {
+            headers: { 'x-admin-api-key': adminApiKey },
+            timeout: 5000
+          });
+          fastify.log.info(`[NotifyBot] Sent activation notice to bot for user ${tgId}`);
+        } catch (e: any) {
+          fastify.log.error(`[NotifyBot] Failed to notify bot: ${e.message}`);
+        }
+      }).catch(e => {
+        fastify.log.error(`[NotifyBot] Import axios failed: ${e.message}`);
+      });
+    }
+
     return reply.send({ ok: success });
   });
 
