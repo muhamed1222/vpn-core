@@ -26,7 +26,7 @@ const marzbanClient = axios.create({
     timeout: 10000,
     httpAgent,
     httpsAgent,
-    validateStatus: () => true,
+    validateStatus: () => true, // Handle 4xx/5xx manually
     maxRedirects: 0,
 });
 
@@ -95,7 +95,6 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                 }
 
                 // Check Limits
-                // Logic: Check if device exists. If not, check count.
                 const existingDevices = getDevices(userRef);
                 const isKnown = existingDevices.some(d => d.device_id === deviceId);
 
@@ -119,9 +118,9 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                             country: country || undefined
                         });
 
-                        // Notify if new (created within last 5s)
+                        // Notify if new (created within last 30s)
                         const createdTime = new Date(device.created_at).getTime();
-                        if (Date.now() - createdTime < 5000) {
+                        if (Date.now() - createdTime < 30000) {
                             const userId = parseInt(userRef.replace('tg_', ''));
                             if (userId && !isNaN(userId)) {
                                 sendNewDeviceNotification(userId, device.device_name, device.ip, device.country || 'Unknown', device.platform);
@@ -134,6 +133,9 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
 
                 // Cache verdict as allowed
                 deviceTrackingCache.set(cacheKey, { timestamp: now, allowed: true });
+            } else {
+                // Failed to extract userRef (invalid token format?)
+                fastify.log.warn({ token: token.substring(0, 20) + '...' }, '[SubProxy] Failed to extract valid userRef from token');
             }
         }
 
@@ -167,7 +169,7 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
             return reply.status(response.status).send(response.data);
 
         } catch (err: any) {
-            // Don't log normal disconnects?
+            // Don't log normal disconnects
             if (err.code !== 'ECONNRESET') {
                 fastify.log.error({ err: err.message, token: token.substring(0, 10) + '...' }, '[SubProxy] Proxy Request Failed');
             }
@@ -179,14 +181,46 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
     fastify.get<{ Params: { token: string } }>('/sub/:token/info', (req, rep) => handleProxy(req, rep, true));
 }
 
+/**
+ * Extracts username from Marzban token.
+ * Supports:
+ * 1. Standard JWT (Header.Payload.Sig) -> extracts 'sub' field
+ * 2. Legacy/Simple Base64 -> specific pattern matching
+ */
 function extractUserRefFromToken(token: string): string | null {
     if (!token) return null;
     try {
-        const chunk = token.substring(0, 60).replace(/-/g, '+').replace(/_/g, '/');
+        // 1. Try JWT (Header.Payload.Sig)
+        const parts = token.split('.');
+        if (parts.length === 3) {
+            try {
+                // Javascript's atob/Buffer needs proper padding, but usually works
+                const payload = parts[1];
+                // Fix base64url characters just in case
+                const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
+                const json = Buffer.from(base64, 'base64').toString('utf-8');
+                const data = JSON.parse(json);
+                if (data.sub && typeof data.sub === 'string' && data.sub.startsWith('tg_')) {
+                    return data.sub;
+                }
+            } catch (e) {
+                // Not a valid JWT payload
+            }
+        }
+
+        // 2. Try Legacy decoding (Base64 of string)
+        // Some older systems used base64(username) or base64(username,timestamp)
+        const chunk = token.substring(0, 100).replace(/-/g, '+').replace(/_/g, '/');
         const buffer = Buffer.from(chunk, 'base64');
         const decoded = buffer.toString('utf-8');
-        const match = decoded.match(/([a-zA-Z0-9_]{3,}),\d+/);
-        if (match && match[1]) return match[1];
+
+        // Look for our specific username pattern: tg_123456...
+        // Matches "tg_123456" at start, or "tg_123456,1700000000"
+        const match = decoded.match(/(tg_\d+)/);
+        if (match && match[1]) {
+            return match[1];
+        }
+
         return null;
     } catch {
         return null;
