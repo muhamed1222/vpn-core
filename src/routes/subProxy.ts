@@ -7,22 +7,26 @@ import { sendNewDeviceNotification } from '../services/notifications.js';
 
 // Mapping for location remarks
 const LOCATION_MAPPING: Record<string, string> = {
-    'NL': '🇳🇱 Netherlands',
-    'Netherlands': '🇳🇱 Netherlands',
-    'DE': '🇩🇪 Germany',
-    'Germany': '🇩🇪 Germany',
-    'KZ': '🇰🇿 Kazakhstan',
-    'Kazakhstan': '🇰🇿 Kazakhstan',
-    'Marz': '🚀 Outlivion VPN'
+    'NL': 'Нидерланды',
+    'Netherlands': 'Нидерланды',
+    'DE': 'Германия',
+    'Germany': 'Германия',
+    'KZ': 'Казахстан',
+    'Kazakhstan': 'Казахстан',
+    'Marz': 'Нидерланды (Premium)'
+};
+
+const FLAG_MAPPING: Record<string, string> = {
+    'Нидерланды': '🇳🇱',
+    'Германия': '🇩🇪',
+    'Казахстан': '🇰🇿'
 };
 
 function transformContent(content: string): string {
     try {
-        // Try to detect if it is Base64 (common for V2Ray subscriptions)
         let isBase64 = false;
         let decoded = content;
 
-        // Simple check for base64: no spaces, only allowed chars
         if (/^[A-Za-z0-9+/=]+$/.test(content.trim())) {
             try {
                 decoded = Buffer.from(content.trim(), 'base64').toString('utf-8');
@@ -32,27 +36,65 @@ function transformContent(content: string): string {
             }
         }
 
-        // Apply mapping for each link (usually vless://...#REMARK)
-        // We look for patterns like #NL, #DE, #KZ or even inside JSON/YAML
-        let transformed = decoded;
+        // Разбиваем на строки и обрабатываем каждую ссылку отдельно
+        const lines = decoded.split('\n');
+        const transformedLines = lines.map(line => {
+            if (!line.includes('#')) return line;
 
-        for (const [key, value] of Object.entries(LOCATION_MAPPING)) {
-            // Replace with word boundaries or after '#'
-            const regex = new RegExp(`(#|\\s|\\(|-)${key}(Node|\\s|\\)|-|$)`, 'gi');
-            transformed = transformed.replace(regex, `$1${value}$2`);
+            let [url, remark] = line.split('#');
+            if (!remark) return line;
 
-            // Direct replacement for tags like "DE-Node-01"
-            if (key === 'DE') transformed = transformed.replace(/DE-Node-[0-9]+/g, '🇩🇪 Germany');
-            if (key === 'KZ') transformed = transformed.replace(/KZ-Node-[0-9]+/g, '🇰🇿 Kazakhstan');
-            if (key === 'NL') transformed = transformed.replace(/NL-Node-[0-9]+/g, '🇳🇱 Netherlands');
-        }
+            // Декодируем, чтобы убрать %F0%9F... и прочее
+            try {
+                remark = decodeURIComponent(remark);
+            } catch (e) {
+                // ignore
+            }
+
+            // 1. Убираем всё в круглых () и квадратных [] скобках
+            remark = remark.replace(/\s*\(.*?\)/g, '');
+            remark = remark.replace(/\s*\[.*?\]/g, '');
+
+            // 2. Убираем существующие флаги и эмодзи в начале
+            remark = remark.replace(/^[\s\u{1F300}-\u{1F9FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{1F1E6}-\u{1F1FF}]+/gu, '');
+
+            // Чистим от лишних дефисов и пробелов в начале
+            remark = remark.replace(/^[\s\-_]+/g, '');
+
+            // 3. Заменяем технические названия на русские
+            for (const [key, value] of Object.entries(LOCATION_MAPPING)) {
+                // Используем границы слов и учитываем регистр для коротких кодов (NL, DE, KZ)
+                const isShortCode = key.length <= 2;
+                const regex = new RegExp(`(^|[^a-zA-Z])${key}([^a-zA-Z]|$)`, isShortCode ? 'g' : 'gi');
+
+                if (regex.test(remark)) {
+                    remark = value;
+                    break;
+                }
+            }
+
+            // 4. Добавляем флаг
+            let flag = '🚀';
+            for (const [name, f] of Object.entries(FLAG_MAPPING)) {
+                if (remark.includes(name)) {
+                    flag = f;
+                    break;
+                }
+            }
+
+            const finalRemark = `${flag} ${remark}`.trim();
+
+            return `${url}#${finalRemark}`;
+        });
+
+        const transformed = transformedLines.join('\n');
 
         if (isBase64) {
             return Buffer.from(transformed).toString('base64');
         }
         return transformed;
     } catch (e) {
-        return content; // Fallback to original
+        return content;
     }
 }
 
@@ -99,6 +141,8 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
         const ipAddress = (request.headers['x-real-ip'] as string) || request.ip;
 
         const userRef = extractUserRefFromToken(token);
+        fastify.log.info({ userRef, token: token.substring(0, 10), userAgent }, '[SubProxy] Incoming request');
+
         if (userRef) {
             const deviceId = `${userAgent}|${ipAddress}`;
             if (isDeviceRevoked(userRef, deviceId)) return reply.status(403).send('Device Revoked');

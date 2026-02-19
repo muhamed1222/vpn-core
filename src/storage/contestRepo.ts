@@ -44,7 +44,7 @@ export interface TicketHistoryEntry {
  */
 export function getActiveContest(botDbPath: string): Contest | null {
   const db = getDatabase();
-  
+
   try {
     // Прикрепляем базу бота
     try {
@@ -56,7 +56,7 @@ export function getActiveContest(botDbPath: string): Contest | null {
       }
       throw error;
     }
-    
+
     try {
       // Проверяем, есть ли таблица contests
       const tableExists = db.prepare(`
@@ -70,7 +70,7 @@ export function getActiveContest(botDbPath: string): Contest | null {
       }
 
       const now = new Date().toISOString();
-      
+
       // Сначала проверяем, есть ли вообще конкурсы
       const allContests = db.prepare(`
         SELECT id, title, is_active, starts_at, ends_at
@@ -90,7 +90,7 @@ export function getActiveContest(botDbPath: string): Contest | null {
       }
 
       console.log(`[ContestRepo] Found ${allContests.length} contest(s) in database`);
-      
+
       // Ищем активный конкурс
       // Сначала ищем конкурс, который уже начался и еще не закончился
       let contest = db.prepare(`
@@ -199,7 +199,7 @@ export function getReferralSummary(
   botDbPath: string
 ): ContestSummary | null {
   const db = getDatabase();
-  
+
   try {
     // Прикрепляем базу бота
     try {
@@ -211,7 +211,7 @@ export function getReferralSummary(
       }
       throw error;
     }
-    
+
     try {
       // Получаем конкурс
       const contest = db.prepare(`
@@ -226,23 +226,23 @@ export function getReferralSummary(
         FROM bot_db.contests
         WHERE id = ?
       `).get(contestId) as {
-      id: string;
-      title: string;
-      starts_at: string;
-      ends_at: string;
-      attribution_window_days: number;
-      rules_version: string;
-      is_active: number;
-    } | undefined;
+        id: string;
+        title: string;
+        starts_at: string;
+        ends_at: string;
+        attribution_window_days: number;
+        rules_version: string;
+        is_active: number;
+      } | undefined;
 
-    if (!contest) {
-      db.close();
-      return null;
-    }
+      if (!contest) {
+        db.prepare('DETACH DATABASE bot_db').run();
+        return null;
+      }
 
-    // Получаем реферальную ссылку
-    const referralCode = `REF${tgId}`;
-    const refLink = `https://t.me/outlivion_bot?start=${referralCode}`;
+      // Получаем реферальную ссылку
+      const referralCode = `REF${tgId}`;
+      const refLink = `https://t.me/outlivion_bot?start=${referralCode}`;
 
       // Проверяем наличие таблиц ref_events и ticket_ledger
       const { refEventsExists, ticketLedgerExists } = checkContestTables(db, 'bot_db');
@@ -278,7 +278,7 @@ export function getReferralSummary(
       } else {
         // Fallback на старую логику, если таблицы еще не созданы
         // ВАЖНО: Проверяем окно атрибуции, период конкурса и квалификацию
-        
+
         // Получаем приглашенных друзей за период конкурса
         // Используем COALESCE для совместимости со старыми данными
         const stats = db.prepare(`
@@ -378,7 +378,7 @@ export function getReferralFriends(
   botDbPath: string
 ): ReferralFriend[] {
   const db = getDatabase();
-  
+
   try {
     // Прикрепляем базу бота
     try {
@@ -390,7 +390,7 @@ export function getReferralFriends(
       }
       throw error;
     }
-    
+
     try {
       // Получаем конкурс для проверок периода и окна атрибуции
       const contest = db.prepare(`
@@ -524,10 +524,10 @@ export function getReferralFriends(
         tg_username: f.tg_username,
         status: f.status as ReferralFriend['status'],
         status_reason: f.status_reason,
-        bound_at: typeof f.bound_at === 'string' 
-          ? f.bound_at 
-          : f.bound_at 
-            ? new Date(f.bound_at * 1000).toISOString() 
+        bound_at: typeof f.bound_at === 'string'
+          ? f.bound_at
+          : f.bound_at
+            ? new Date(f.bound_at * 1000).toISOString()
             : new Date().toISOString(),
         tickets_from_friend_total: f.tickets_from_friend_total,
       }));
@@ -560,7 +560,7 @@ export function getTicketHistory(
   botDbPath: string
 ): TicketHistoryEntry[] {
   const db = getDatabase();
-  
+
   try {
     // Прикрепляем базу бота
     try {
@@ -572,7 +572,7 @@ export function getTicketHistory(
       }
       throw error;
     }
-    
+
     try {
       // Получаем конкурс для проверок периода и окна атрибуции
       const contest = db.prepare(`
@@ -671,10 +671,10 @@ export function getTicketHistory(
         id: entry.id,
         created_at: entry.created_at,
         delta: entry.delta,
-        label: entry.delta > 0 
-          ? entry.delta === 1 
+        label: entry.delta > 0
+          ? entry.delta === 1
             ? `Оплата 1 месяц от ${entry.invitee_name || 'друга'}`
-            : entry.delta < 5 
+            : entry.delta < 5
               ? `Оплата ${entry.delta} месяца от ${entry.invitee_name || 'друга'}`
               : `Оплата ${entry.delta} месяцев от ${entry.invitee_name || 'друга'}`
           : `Возврат ${Math.abs(entry.delta)} ${Math.abs(entry.delta) === 1 ? 'месяц' : Math.abs(entry.delta) < 5 ? 'месяца' : 'месяцев'}`,
@@ -729,7 +729,7 @@ export function getAllContestTickets(
   botDbPath: string
 ): ContestTicket[] {
   const db = getDatabase();
-  
+
   try {
     // Прикрепляем базу бота
     try {
@@ -741,7 +741,7 @@ export function getAllContestTickets(
       }
       throw error;
     }
-    
+
     try {
       // Проверяем наличие таблицы ticket_ledger
       const { ticketLedgerExists } = checkContestTables(db, 'bot_db');
@@ -798,7 +798,7 @@ export function getAllContestParticipants(
   botDbPath: string
 ): ContestParticipant[] {
   const db = getDatabase();
-  
+
   try {
     // Прикрепляем базу бота
     try {
@@ -810,7 +810,7 @@ export function getAllContestParticipants(
       }
       throw error;
     }
-    
+
     try {
       // Проверяем наличие таблиц
       const { refEventsExists, ticketLedgerExists } = checkContestTables(db, 'bot_db');
