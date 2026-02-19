@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import { createVerifyAuth } from '../../auth/verifyAuth.js';
-import { getDevicesByUser } from '../../storage/devicesRepo.js';
+import { getDevices, getDeviceById, revokeDevice } from '../../storage/devicesRepo.js';
+import { MarzbanService } from '../../integrations/marzban/service.js';
 
 export async function userRoutes(fastify: FastifyInstance) {
   const jwtSecret: string = fastify.authJwtSecret;
@@ -11,23 +12,18 @@ export async function userRoutes(fastify: FastifyInstance) {
   const verifyAuth = createVerifyAuth({
     jwtSecret,
     cookieName,
-    botToken: fastify.telegramBotToken, // Добавляем botToken для поддержки initData
+    botToken: fastify.telegramBotToken,
     adminApiKey,
   });
 
-  /**
-   * GET /v1/user/config
-   * Возвращает стабильный VPN-ключ из БД или Marzban.
-   */
+  // GET /v1/user/config
   fastify.get('/config', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
-    // Admin mode: allow reading config for an arbitrary tgId (service-to-service).
     const tgIdParamRaw = (request.query as any)?.tgId;
     const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
     const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
 
-    // Теперь вся логика стабильности (БД + Marzban) внутри getUserConfig
     const config = await marzbanService.getUserConfig(targetTgId);
 
     if (!config) {
@@ -40,9 +36,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     return reply.send({ ok: true, config });
   });
 
-  /**
-   * GET /v1/user/status
-   */
+  // GET /v1/user/status
   fastify.get('/status', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
     const tgIdParamRaw = (request.query as any)?.tgId;
@@ -54,49 +48,34 @@ export async function userRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: 'Missing Telegram ID' });
     }
 
-    fastify.log.info({ targetTgId, requester: request.user.tgId }, '[UserStatus] Querying status from Marzban');
-
     const status = await marzbanService.getUserStatus(targetTgId);
-    fastify.log.info({ targetTgId, status: status ? { username: status.username, status: status.status, expire: status.expire } : 'NOT_FOUND' }, '[UserStatus] Marzban returned data');
 
     const now = Math.floor(Date.now() / 1000);
-    // Подписка активна если статус 'active' И (срок не установлен ИЛИ еще не вышел)
     const isActive = status &&
       status.status === 'active' &&
       (!status.expire || status.expire === 0 || status.expire > now);
 
-    fastify.log.info({ targetTgId, isActive, now, expire: status?.expire }, '[UserStatus] Computed isActive');
-
     return reply.send({
       ok: !!isActive,
       status: isActive ? 'active' : (status?.status || 'disabled'),
-      expiresAt: status?.expire ? status.expire * 1000 : null, // Конвертируем в миллисекунды
+      expiresAt: status?.expire ? status.expire * 1000 : null,
       usedTraffic: (status && typeof status.used_traffic === 'number') ? status.used_traffic : 0,
       dataLimit: (status && typeof status.data_limit === 'number') ? status.data_limit : 0,
     });
   });
 
-  /**
-   * POST /v1/user/regenerate
-   */
+  // POST /v1/user/regenerate
   fastify.post('/regenerate', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
-    // Admin mode: allow regenerating for an arbitrary tgId (service-to-service).
     const tgIdParamRaw = (request.query as any)?.tgId || (request.body as any)?.tgId;
     const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
     const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
 
-    if (!targetTgId) {
-      return reply.status(400).send({ error: 'Missing Telegram ID' });
-    }
+    if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
 
-    fastify.log.info({ targetTgId, requester: request.user.tgId }, '[UserRegenerate] Regenerating key');
-
-    // 1. Генерируем новый (Marzban + сохранение в vpn_keys БД)
     const config = await marzbanService.regenerateUser(targetTgId);
 
-    // 2. Также обновляем "замороженный" ключ в последнем оплаченном заказе (для совместимости)
     if (config) {
       const { getOrdersByUser, markPaidWithKey } = await import('../../storage/ordersRepo.js');
       const userRef = `tg_${targetTgId}`;
@@ -111,9 +90,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     return reply.send({ ok: true, config });
   });
 
-  /**
-   * POST /v1/user/renew (Для админки бота и акций)
-   */
+  // POST /v1/user/renew
   fastify.post<{ Body: { tgId: number; days: number } }>('/renew', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
     if (!request.user.isAdmin) return reply.status(403).send({ error: 'Forbidden' });
@@ -122,10 +99,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     return reply.send({ ok: success });
   });
 
-  /**
-   * GET /v1/user/billing
-   * Статистика использования трафика
-   */
+  // GET /v1/user/billing
   fastify.get('/billing', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
@@ -133,9 +107,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
     const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
 
-    if (!targetTgId) {
-      return reply.status(400).send({ error: 'Missing Telegram ID' });
-    }
+    if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
 
     const status = await marzbanService.getUserStatus(targetTgId);
 
@@ -171,17 +143,12 @@ export async function userRoutes(fastify: FastifyInstance) {
       planName: null,
       period: {
         start: null,
-        end: expire ? expire * 1000 : null, // Конвертируем в миллисекунды
+        end: expire ? expire * 1000 : null,
       },
     });
   });
 
-  /**
-   * GET /v1/user/devices
-   * Информация об устройствах и активности пользователя.
-   * Читает из device_connections (заполняется subscription proxy).
-   * Если таблица пуста — фолбэк на Marzban API.
-   */
+  // GET /v1/user/devices
   fastify.get('/devices', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
 
@@ -189,67 +156,45 @@ export async function userRoutes(fastify: FastifyInstance) {
     const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
     const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
 
-    if (!targetTgId) {
-      return reply.status(400).send({ error: 'Missing Telegram ID' });
-    }
+    if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
 
     try {
       const userRef = `tg_${targetTgId}`;
-      const dbDevices = getDevicesByUser(userRef);
+      // Use getDevices (new method)
+      const dbDevices: any[] = getDevices(userRef);
 
-      // Если в нашей БД есть записи — отдаём их
       if (dbDevices.length > 0) {
         const now = Date.now();
         const FIVE_MINUTES = 5 * 60 * 1000;
 
         const devices = dbDevices.map(d => ({
-          id: `device_${d.id}`,
-          name: `${d.device_type} (${d.app_name})`,
-          type: d.device_type,
-          app: d.app_name,
+          id: d.id, // now using PK
+          name: d.device_name,
+          platform: d.platform,
+          app: d.device_name.split(' ')[0],
+          ipAddress: d.ip,
+          country: d.country,
           lastActive: d.last_seen,
-          firstSeen: d.first_seen,
-          ipAddress: d.ip_address,
-          requestCount: d.request_count,
-          status: !!d.is_revoked ? 'revoked' : (now - new Date(d.last_seen).getTime() < FIVE_MINUTES) ? 'online' as const : 'offline' as const,
+          firstSeen: d.created_at,
+          isRevoked: !!d.is_revoked,
+          status: !!d.is_revoked ? 'revoked' : (now - new Date(d.last_seen).getTime() < FIVE_MINUTES) ? 'online' : 'offline',
         }));
 
-        // Дополняем данными из Marzban (ноды, онлайн-статус)
         const marzbanInfo = await marzbanService.getDeviceInfo(targetTgId).catch(() => null);
 
         const response = {
           devices,
           nodes: marzbanInfo?.nodes || [],
           lastOnline: marzbanInfo?.lastOnline || dbDevices[0]?.last_seen || null,
-          userAgent: marzbanInfo?.userAgent || dbDevices[0]?.user_agent || '',
+          userAgent: marzbanInfo?.userAgent || '',
           subUpdatedAt: marzbanInfo?.subUpdatedAt || null,
         };
-
-        // LOGGING FOR DEBUG
-        fastify.log.info({
-          targetTgId,
-          devicesCount: response.devices.length,
-          nodesCount: response.nodes.length,
-          response
-        }, '[UserDevices] Returning device info');
 
         return reply.send(response);
       }
 
-      // Фолбэк: нет данных в device_connections → берём из Marzban
       const deviceInfo = await marzbanService.getDeviceInfo(targetTgId);
-
-      // LOGGING FOR DEBUG
-      fastify.log.info({
-        targetTgId,
-        source: 'marzban_fallback',
-        deviceInfo
-      }, '[UserDevices] Returning fallback device info');
-
-      if (!deviceInfo) {
-        return reply.send({ devices: [], nodes: [], lastOnline: null, userAgent: '', subUpdatedAt: null });
-      }
-
+      if (!deviceInfo) return reply.send({ devices: [], nodes: [], lastOnline: null, userAgent: '', subUpdatedAt: null });
       return reply.send(deviceInfo);
     } catch (error: any) {
       fastify.log.error({ targetTgId, error: error.message }, '[UserDevices] Failed to get device info');
@@ -257,34 +202,45 @@ export async function userRoutes(fastify: FastifyInstance) {
     }
   });
 
-  /**
-   * GET /v1/user/referrals
-   * Статистика реферальной программы
-   */
+  // DELETE /v1/user/devices/:id
+  fastify.delete<{ Params: { id: string } }>('/devices/:id', { preHandler: verifyAuth }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const { id } = request.params;
+    const deviceId = parseInt(id, 10);
+
+    if (isNaN(deviceId)) return reply.status(400).send({ error: 'Invalid device ID' });
+
+    const device = getDeviceById(deviceId);
+    if (!device) return reply.status(404).send({ error: 'Device not found' });
+
+    // Check ownership
+    const userRef = `tg_${request.user.tgId}`;
+    if (device.vpn_key_id !== userRef && !request.user.isAdmin) {
+      return reply.status(403).send({ error: 'Forbidden' });
+    }
+
+    revokeDevice(deviceId, userRef);
+    return reply.send({ ok: true });
+  });
+
+  // GET /v1/user/referrals
   fastify.get('/referrals', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
-
     const tgIdParamRaw = (request.query as any)?.tgId;
     const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
     const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
 
-    if (!targetTgId) {
-      return reply.status(400).send({ error: 'Missing Telegram ID' });
-    }
+    if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
 
     const botDbPath = process.env.BOT_DATABASE_PATH;
     if (!botDbPath) {
       return reply.send({
-        totalCount: 0,
-        trialCount: 0,
-        premiumCount: 0,
-        referralCode: `REF${targetTgId}`,
+        totalCount: 0, trialCount: 0, premiumCount: 0, referralCode: `REF${targetTgId}`,
       });
     }
 
     const { getReferralStats } = await import('../../storage/referralsRepo.js');
     const stats = getReferralStats(targetTgId, botDbPath);
-
     return reply.send(stats);
   });
 }
