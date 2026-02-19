@@ -39,7 +39,11 @@ export class MarzbanService {
    */
   private formatSubscriptionUrl(user: MarzbanUser): string {
     if (user.subscription_url) {
-      // subscription_url уже содержит /sub/..., добавляем только proxy path
+      // Если это уже полный URL (начинается с http), возвращаем как есть
+      if (user.subscription_url.startsWith('http')) {
+        return user.subscription_url;
+      }
+      // subscription_url имеет формат /sub/..., поэтому добавляем proxy path
       return `${this.publicUrl}${this.subscriptionPath}${user.subscription_url}`;
     }
     // Если нет, берем первую из списка links
