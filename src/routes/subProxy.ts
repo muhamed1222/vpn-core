@@ -2,81 +2,142 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import axios from 'axios';
 import * as http from 'http';
 import * as https from 'https';
-import { trackDevice } from '../storage/devicesRepo.js';
+import { trackDevice, getActiveDeviceCount, isDeviceRevoked, getDevices } from '../storage/devicesRepo.js';
+import { sendNewDeviceNotification } from '../services/notifications.js';
 
-// Кеш для дебаунса записи в БД: ключ -> timestamp
-const deviceTrackingCache = new Map<string, number>();
-const TRACKING_COOLDOWN_MS = 60 * 1000; // 1 минута
+// Cache for debounce/rate-limiting: key -> { timestamp, allowed, reason }
+interface CacheEntry {
+    timestamp: number;
+    allowed: boolean;
+    reason?: string;
+}
+const deviceTrackingCache = new Map<string, CacheEntry>();
+const TRACKING_COOLDOWN_MS = 60 * 1000; // 1 minute cache for decision
 
-// Общий агент с keepAlive для переиспользования соединений
+// GeoIP Cache (IP -> Country)
+const geoIpCache = new Map<string, string>();
+
+// Shared Agents
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
 
-// Создаем инстанс axios с агентами
+// Axios Instances
 const marzbanClient = axios.create({
-    timeout: 10000, // 10 секунд
+    timeout: 10000,
     httpAgent,
     httpsAgent,
-    validateStatus: () => true, // Не бросать ошибку на 404/500
+    validateStatus: () => true,
     maxRedirects: 0,
 });
+
+async function getCountry(ip: string): Promise<string | null> {
+    if (geoIpCache.has(ip)) return geoIpCache.get(ip)!;
+    if (ip === '127.0.0.1' || ip.startsWith('192.168.') || ip === '::1') return 'Localhost';
+
+    try {
+        // Use ip-api.com (free, rate-limited 45/min). Cache helps avoid limits.
+        const res = await axios.get(`http://ip-api.com/json/${ip}?fields=status,country`, {
+            timeout: 2000,
+            httpAgent,
+            httpsAgent
+        });
+        if (res.data && res.data.status === 'success') {
+            const country = res.data.country;
+            if (geoIpCache.size > 1000) geoIpCache.clear(); // Simple LRU-ish
+            geoIpCache.set(ip, country);
+            return country;
+        }
+    } catch { }
+    return null;
+}
 
 export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
     const MARZBAN_URL = process.env.MARZBAN_API_URL || 'http://127.0.0.1:8000';
 
-    // Очистка старого кеша раз в час
+    // Cleanup cache periodically
     setInterval(() => {
         const now = Date.now();
-        for (const [key, time] of deviceTrackingCache.entries()) {
-            if (now - time > TRACKING_COOLDOWN_MS * 60) {
+        for (const [key, entry] of deviceTrackingCache.entries()) {
+            if (now - entry.timestamp > TRACKING_COOLDOWN_MS * 60) {
                 deviceTrackingCache.delete(key);
             }
         }
     }, 3600 * 1000);
 
-    // Основной хендлер
     const handleProxy = async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply, isInfo = false) => {
         const { token } = request.params;
         const userAgent = (request.headers['user-agent'] as string) || 'unknown';
-        // Получаем реальный IP
         const ipAddress = (request.headers['x-real-ip'] as string)
             || (request.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
             || request.ip;
 
-        // 1. Асинхронный трекинг (Fire-and-forget, Debounced)
-        try {
-            if (token && userAgent && userAgent !== 'unknown') {
-                const cacheKey = `${token}:${userAgent}:${ipAddress}`;
-                const lastTracked = deviceTrackingCache.get(cacheKey);
-                const now = Date.now();
+        const cacheKey = `${token}:${userAgent}:${ipAddress}`;
+        const cached = deviceTrackingCache.get(cacheKey);
+        const now = Date.now();
 
-                // Пишем в БД только если прошло время кулдауна, или никогда не писали
-                if (!lastTracked || (now - lastTracked > TRACKING_COOLDOWN_MS)) {
-                    // Ставим в кеш СРАЗУ, чтобы следующие запросы (через мс) уже отсекались
-                    deviceTrackingCache.set(cacheKey, now);
-
-                    // Парсим токен в setImmediate, чтобы не блокировать этот request
-                    setImmediate(() => {
-                        try {
-                            const userRef = extractUserRefFromToken(token);
-                            if (userRef) {
-                                trackDevice({
-                                    userRef,
-                                    userAgent,
-                                    ipAddress,
-                                });
-                            }
-                        } catch (err: any) {
-                            // Тихо игнорируем ошибки
-                        }
-                    });
-                }
+        // 1. Check Cache
+        if (cached && (now - cached.timestamp < TRACKING_COOLDOWN_MS)) {
+            if (!cached.allowed) {
+                return reply.status(403).send(cached.reason || 'Forbidden');
             }
-        } catch (e) {
-            // Игнорируем ошибки трекинга
+            // If allowed, proceed to proxy
+        } else {
+            // 2. Perform Logic (DB check)
+            const userRef = extractUserRefFromToken(token);
+
+            if (userRef) {
+                const deviceId = `${userAgent}|${ipAddress}`; // Composite ID matching Repo logic
+
+                // Check Revoked
+                if (isDeviceRevoked(userRef, deviceId)) {
+                    deviceTrackingCache.set(cacheKey, { timestamp: now, allowed: false, reason: 'Device Revoked' });
+                    return reply.status(403).send('Device Revoked');
+                }
+
+                // Check Limits
+                // Logic: Check if device exists. If not, check count.
+                const existingDevices = getDevices(userRef);
+                const isKnown = existingDevices.some(d => d.device_id === deviceId);
+
+                // Only enforce limit on NEW devices
+                if (!isKnown) {
+                    const activeCount = getActiveDeviceCount(userRef);
+                    if (activeCount >= 5) { // Limit 5
+                        deviceTrackingCache.set(cacheKey, { timestamp: now, allowed: false, reason: 'Device Limit Exceeded (Max 5)' });
+                        return reply.status(403).send('Device Limit Exceeded (Max 5)');
+                    }
+                }
+
+                // If Allowed -> Track & Notify (Async)
+                setImmediate(async () => {
+                    try {
+                        const country = await getCountry(ipAddress);
+                        const device = trackDevice({
+                            userRef,
+                            userAgent,
+                            ip: ipAddress,
+                            country: country || undefined
+                        });
+
+                        // Notify if new (created within last 5s)
+                        const createdTime = new Date(device.created_at).getTime();
+                        if (Date.now() - createdTime < 5000) {
+                            const userId = parseInt(userRef.replace('tg_', ''));
+                            if (userId && !isNaN(userId)) {
+                                sendNewDeviceNotification(userId, device.device_name, device.ip, device.country || 'Unknown', device.platform);
+                            }
+                        }
+                    } catch (e) {
+                        fastify.log.error({ err: e }, '[SubProxy] Async tracking failed');
+                    }
+                });
+
+                // Cache verdict as allowed
+                deviceTrackingCache.set(cacheKey, { timestamp: now, allowed: true });
+            }
         }
 
-        // 2. Проксирование (Stream)
+        // 3. Proxy to Marzban
         try {
             const targetUrl = `${MARZBAN_URL}/sub/${token}${isInfo ? '/info' : ''}`;
 
@@ -84,73 +145,48 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                 headers: {
                     'User-Agent': userAgent,
                     'Accept': request.headers['accept'] || '*/*',
-                    'Host': request.headers['host'] || 'vpn.outlivion.space',
+                    'Host': request.headers['host'] || 'vpn.outlivion.space', // Forward Host header
                     'X-Real-IP': ipAddress,
                     'X-Forwarded-For': request.headers['x-forwarded-for'] || ipAddress
                 },
-                responseType: 'stream' // Важно для производительности
+                responseType: 'stream'
             });
 
-            // Копируем заголовки ответа
+            // Forward headers
             const headersToForward = [
-                'content-type',
-                'subscription-userinfo',
-                'profile-update-interval',
-                'profile-title',
-                'content-disposition',
-                'profile-web-page-url',
-                'cache-control',
-                'date',
-                'etag'
+                'content-type', 'subscription-userinfo', 'profile-update-interval',
+                'profile-title', 'content-disposition', 'profile-web-page-url',
+                'cache-control', 'date', 'etag'
             ];
 
             for (const header of headersToForward) {
                 const value = response.headers[header];
-                if (value) {
-                    reply.header(header, value);
-                }
+                if (value) reply.header(header, value);
             }
 
-            // Отправляем поток клиенту
             return reply.status(response.status).send(response.data);
 
         } catch (err: any) {
-            // Логируем только реальные сетевые ошибки
-            fastify.log.error({
-                err: err.message,
-                token: token.substring(0, 10) + '...',
-            }, '[SubProxy] Proxy Request Failed');
-
+            // Don't log normal disconnects?
+            if (err.code !== 'ECONNRESET') {
+                fastify.log.error({ err: err.message, token: token.substring(0, 10) + '...' }, '[SubProxy] Proxy Request Failed');
+            }
             return reply.status(502).send('Bad Gateway');
         }
     };
 
-    // GET /sub/:token
     fastify.get<{ Params: { token: string } }>('/sub/:token', (req, rep) => handleProxy(req, rep, false));
-
-    // GET /sub/:token/info
     fastify.get<{ Params: { token: string } }>('/sub/:token/info', (req, rep) => handleProxy(req, rep, true));
 }
 
-/**
- * Извлекает user_ref (marzban username) из subscription token.
- * Токен Marzban закодирован в base64url.
- */
 function extractUserRefFromToken(token: string): string | null {
     if (!token) return null;
     try {
-        // В Marzban токен начинается с base64-строки
-        // Берем первые 60 символов, заменяем URL-safe символы и декодируем
         const chunk = token.substring(0, 60).replace(/-/g, '+').replace(/_/g, '/');
         const buffer = Buffer.from(chunk, 'base64');
         const decoded = buffer.toString('utf-8');
-
-        // Ищем паттерн "username," или "tg_123,"
         const match = decoded.match(/([a-zA-Z0-9_]{3,}),\d+/);
-        if (match && match[1]) {
-            return match[1];
-        }
-
+        if (match && match[1]) return match[1];
         return null;
     } catch {
         return null;

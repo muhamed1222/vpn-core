@@ -211,7 +211,7 @@ export async function userRoutes(fastify: FastifyInstance) {
           firstSeen: d.first_seen,
           ipAddress: d.ip_address,
           requestCount: d.request_count,
-          status: (now - new Date(d.last_seen).getTime() < FIVE_MINUTES) ? 'online' as const : 'offline' as const,
+          status: !!d.is_revoked ? 'revoked' : (now - new Date(d.last_seen).getTime() < FIVE_MINUTES) ? 'online' as const : 'offline' as const,
         }));
 
         // Дополняем данными из Marzban (ноды, онлайн-статус)
