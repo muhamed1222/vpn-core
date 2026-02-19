@@ -5,35 +5,32 @@ import * as https from 'https';
 import { trackDevice, getActiveDeviceCount, isDeviceRevoked, getDevices } from '../storage/devicesRepo.js';
 import { sendNewDeviceNotification } from '../services/notifications.js';
 
-// Cache for debounce/rate-limiting: key -> { timestamp, allowed, reason }
+// Cache for debounce/rate-limiting
 interface CacheEntry {
     timestamp: number;
     allowed: boolean;
     reason?: string;
 }
 const deviceTrackingCache = new Map<string, CacheEntry>();
-const TRACKING_COOLDOWN_MS = 60 * 1000; // 1 minute cache for decision
+const TRACKING_COOLDOWN_MS = 60 * 1000;
 
-// GeoIP Cache (IP -> Country)
+// GeoIP Cache
 const geoIpCache = new Map<string, string>();
 
-// Shared Agents
 const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 100 });
 const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 100 });
 
-// Axios Instances
 const marzbanClient = axios.create({
     timeout: 10000,
     httpAgent,
     httpsAgent,
-    validateStatus: () => true, // Handle 4xx/5xx manually
+    validateStatus: () => true,
     maxRedirects: 0,
 });
 
 async function getCountry(ip: string): Promise<string | null> {
     if (geoIpCache.has(ip)) return geoIpCache.get(ip)!;
     if (ip === '127.0.0.1' || ip.startsWith('192.168.') || ip === '::1') return 'Localhost';
-
     try {
         const res = await axios.get(`http://ip-api.com/json/${ip}?fields=status,country`, {
             timeout: 2000,
@@ -53,7 +50,6 @@ async function getCountry(ip: string): Promise<string | null> {
 export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
     const MARZBAN_URL = process.env.MARZBAN_API_URL || 'http://127.0.0.1:8000';
 
-    // Cleanup cache
     setInterval(() => {
         const now = Date.now();
         for (const [key, entry] of deviceTrackingCache.entries()) {
@@ -74,15 +70,13 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
         const cached = deviceTrackingCache.get(cacheKey);
         const now = Date.now();
 
-        // 1. Check Cache
+        // 1. Check Cache / Device Limits
         if (cached && (now - cached.timestamp < TRACKING_COOLDOWN_MS)) {
             if (!cached.allowed) {
                 return reply.status(403).send(cached.reason || 'Forbidden');
             }
         } else {
-            // 2. Perform Logic (DB check)
             const userRef = extractUserRefFromToken(token);
-
             if (userRef) {
                 const deviceId = `${userAgent}|${ipAddress}`;
 
@@ -102,7 +96,6 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                     }
                 }
 
-                // Async Track
                 setImmediate(async () => {
                     try {
                         const country = await getCountry(ipAddress);
@@ -125,14 +118,11 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                 });
 
                 deviceTrackingCache.set(cacheKey, { timestamp: now, allowed: true });
-            } else {
-                fastify.log.debug({ token: token.substring(0, 10) }, '[SubProxy] Failed to extract userRef');
             }
         }
 
-        // 3. Proxy to Marzban
+        // 2. Proxy to Marzban
         try {
-            // Forward correct URL with query params
             const queryString = new URLSearchParams(request.query as any).toString();
             const targetUrl = `${MARZBAN_URL}/sub/${token}${isInfo ? '/info' : ''}${queryString ? '?' + queryString : ''}`;
 
@@ -143,25 +133,25 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                     'Host': request.headers['host'] || 'vpn.outlivion.space',
                     'X-Real-IP': ipAddress,
                     'X-Forwarded-For': request.headers['x-forwarded-for'] || ipAddress,
-                    'X-Forwarded-Proto': 'https', // Validate branding/secure links
+                    'X-Forwarded-Proto': 'https',
                 },
                 responseType: 'stream'
             });
 
-            // Forward All Valid Headers
             const hopByHopHeaders = [
                 'host', 'connection', 'upgrade', 'keep-alive', 'proxy-authenticate',
                 'proxy-authorization', 'te', 'trailer', 'transfer-encoding',
                 'content-encoding', 'content-length'
             ];
 
+            // Forward headers
             for (const [key, value] of Object.entries(response.headers)) {
                 const lowerKey = key.toLowerCase();
                 if (hopByHopHeaders.includes(lowerKey)) continue;
-                if (lowerKey.startsWith('access-control-')) continue; // Let Fastify CORS handle
+                if (lowerKey.startsWith('access-control-')) continue;
 
-                // Capitalize known headers for Client Compatibility
                 let headerName = key;
+                // Format common Branding headers to Camel-Case for clients
                 if (lowerKey === 'subscription-userinfo') headerName = 'Subscription-UserInfo';
                 else if (lowerKey === 'profile-title') headerName = 'Profile-Title';
                 else if (lowerKey === 'profile-web-page-url') headerName = 'Profile-Web-Page-Url';
@@ -169,6 +159,14 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
                 else if (lowerKey === 'content-disposition') headerName = 'Content-Disposition';
 
                 reply.header(headerName, value);
+            }
+
+            // Ensure Branding Headers exist (Fallback)
+            if (!response.headers['profile-title']) {
+                reply.header('Profile-Title', 'Outlivian VPN');
+            }
+            if (!response.headers['profile-web-page-url']) {
+                reply.header('Profile-Web-Page-Url', 'https://t.me/OutlivionBot');
             }
 
             return reply.status(response.status).send(response.data);
@@ -204,11 +202,7 @@ function extractUserRefFromToken(token: string): string | null {
         const buffer = Buffer.from(chunk, 'base64');
         const decoded = buffer.toString('utf-8');
         const match = decoded.match(/(tg_\d+)/);
-        if (match && match[1]) {
-            return match[1];
-        }
+        if (match && match[1]) { return match[1]; }
         return null;
-    } catch {
-        return null;
-    }
+    } catch { return null; }
 }
