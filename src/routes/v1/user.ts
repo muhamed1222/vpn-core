@@ -300,4 +300,63 @@ export async function userRoutes(fastify: FastifyInstance) {
     const stats = getReferralStats(targetTgId, botDbPath);
     return reply.send(stats);
   });
+
+  // GET /v1/user/autorenewal
+  fastify.get('/autorenewal', { preHandler: verifyAuth }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const tgIdParamRaw = (request.query as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
+    if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
+
+    const { getPrisma } = await import('../../storage/prisma.js');
+    const prisma = getPrisma();
+
+    const user = await prisma.user.findUnique({
+      where: { vpnTgId: BigInt(targetTgId) },
+      include: { subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 } }
+    });
+
+    const activeSub = user?.subscriptions[0];
+    return reply.send({
+      enabled: activeSub ? activeSub.autoRenewEnabled : false,
+      canEnable: !!activeSub?.paymentMethodId
+    });
+  });
+
+  // POST /v1/user/autorenewal
+  fastify.post('/autorenewal', { preHandler: verifyAuth }, async (request, reply) => {
+    if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
+    const { enabled } = request.body as { enabled: boolean };
+    const tgIdParamRaw = (request.query as any)?.tgId || (request.body as any)?.tgId;
+    const tgIdParam = tgIdParamRaw ? Number(tgIdParamRaw) : null;
+    const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
+
+    if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
+
+    const { getPrisma } = await import('../../storage/prisma.js');
+    const prisma = getPrisma();
+
+    const user = await prisma.user.findUnique({
+      where: { vpnTgId: BigInt(targetTgId) },
+      include: { subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 } }
+    });
+
+    const activeSub = user?.subscriptions[0];
+    if (!activeSub) {
+      return reply.status(404).send({ error: 'No subscription found' });
+    }
+
+    if (enabled && !activeSub.paymentMethodId) {
+      return reply.status(400).send({ error: 'No saved payment method' });
+    }
+
+    const updated = await prisma.subscription.update({
+      where: { id: activeSub.id },
+      data: { autoRenewEnabled: enabled }
+    });
+
+    return reply.send({ enabled: updated.autoRenewEnabled });
+  });
 }

@@ -7,13 +7,9 @@ import { createVerifyAuth } from '../../auth/verifyAuth.js';
 import { isYooKassaIP } from '../../config/yookassa.js';
 import { awardTicketsForPayment } from '../../storage/contestUtils.js';
 import { awardRetryScheduler } from '../../services/awardRetryScheduler.js';
-import { PrismaClient } from '@prisma/client';
-import { PrismaPg } from '@prisma/adapter-pg';
-import pg from 'pg';
+import { getPrisma } from '../../storage/prisma.js';
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+const prisma = getPrisma();
 
 const yookassaWebhookSchema = z.object({
   type: z.literal('notification'),
