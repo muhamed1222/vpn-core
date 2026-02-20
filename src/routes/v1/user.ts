@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import { createVerifyAuth } from '../../auth/verifyAuth.js';
 import { getDevices, getDeviceById, revokeDevice } from '../../storage/devicesRepo.js';
 import { MarzbanService } from '../../integrations/marzban/service.js';
+import fs from 'fs';
 
 export async function userRoutes(fastify: FastifyInstance) {
   const jwtSecret: string = fastify.authJwtSecret;
@@ -61,6 +62,28 @@ export async function userRoutes(fastify: FastifyInstance) {
       expiresAt: status?.expire ? status.expire * 1000 : null,
       usedTraffic: (status && typeof status.used_traffic === 'number') ? status.used_traffic : 0,
       dataLimit: (status && typeof status.data_limit === 'number') ? status.data_limit : 0,
+      discount: await (async () => {
+        const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
+        if (fs.existsSync(botDbPath)) {
+          try {
+            const { getDatabase } = await import('../../storage/db.js');
+            const db = getDatabase();
+            db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+            const userRow = db.prepare(`
+              SELECT discount_percent, discount_expires_at 
+              FROM bot_db.users 
+              WHERE id = ?
+            `).get(targetTgId) as any;
+            db.prepare('DETACH DATABASE bot_db').run();
+            if (userRow && userRow.discount_percent && (!userRow.discount_expires_at || userRow.discount_expires_at > Date.now())) {
+              return { percent: userRow.discount_percent, expiresAt: userRow.discount_expires_at };
+            }
+          } catch (e) {
+            fastify.log.error(e, 'Failed to fetch discount for status');
+          }
+        }
+        return null;
+      })(),
     });
   });
 

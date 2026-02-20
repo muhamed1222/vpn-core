@@ -11,6 +11,8 @@ import fs from 'fs';
 const createOrderSchema = z.object({
   planId: z.string().min(1),
   returnUrlBase: z.string().url().optional(),
+  bonusDays: z.number().int().min(0).optional(),
+  autoRenew: z.boolean().optional(),
   // userRef больше не принимаем из body, берем из request.user
 });
 
@@ -42,6 +44,8 @@ export async function ordersRoutes(fastify: FastifyInstance) {
             planId: { type: 'string' },
             tgId: { type: 'number' },
             returnUrlBase: { type: 'string' },
+            bonusDays: { type: 'number' },
+            autoRenew: { type: 'boolean' },
           },
         },
       },
@@ -64,7 +68,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { planId, tgId, returnUrlBase } = request.body as any;
+      const { planId, tgId, returnUrlBase, bonusDays, autoRenew } = request.body as any;
 
       // Проверка: если пользователь пытается купить plan_7, но у него уже есть оплаченные ордера - отклоняем
       if (planId === 'plan_7') {
@@ -214,6 +218,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           orderId,
           planId,
           userRef,
+          bonusDays,
         });
 
         // Создаем платеж в YooKassa
@@ -254,6 +259,11 @@ export async function ordersRoutes(fastify: FastifyInstance) {
             ],
           },
         };
+
+        if (autoRenew) {
+          paymentParams.save_payment_method = true;
+          paymentParams.metadata.autoRenew = 'true';
+        }
 
         const payment = await yookassaClient.createPayment(
           paymentParams,

@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  passwordHash    String
+  emailVerifiedAt DateTime?
+  vpnTgId         BigInt?  @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions      Session[]
+  orders        Order[]
+  subscriptions Subscription[]
+
+  referredConversions ReferralConversion[] @relation("ReferrerConversions")
+  refereeConversions  ReferralConversion[] @relation("RefereeConversions")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  expiresAt DateTime
+
+  @@index([userId])
+}
+
+model EmailVerification {
+  id         String   @id @default(cuid())
+  email      String
+  codeHash   String
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  consumedAt DateTime?
+
+  @@index([email])
+  @@index([expiresAt])
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  FAILED
+  CANCELED
+  REFUNDED
+}
+
+enum PaymentStatus {
+  CREATED
+  SUCCEEDED
+  FAILED
+}
+
+model Order {
+  id String @id @default(cuid())
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  email       String
+  productId   String
+  paymentType String
+  country     String?
+  vpnTgId     BigInt?
+
+  promocode String?
+  bonusDays Int @default(0)
+
+  // Money is stored in minor units (e.g. cents/kopeks) to avoid float issues.
+  currency     String
+  subtotalMinor Int
+  discountMinor Int @default(0)
+  totalMinor    Int
+
+  status OrderStatus @default(PENDING)
+
+  provider    String?
+  providerRef String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([userId])
+  @@index([status])
+
+  payments Payment[]
+
+  referralConversion ReferralConversion?
+}
+
+model Payment {
+  id String @id @default(cuid())
+
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  provider String
+  status   PaymentStatus @default(CREATED)
+
+  // Money is stored in minor units (e.g. cents/kopeks).
+  currency   String
+  amountMinor Int
+
+  providerRef String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([provider])
+  @@index([status])
+}
+
+model WebhookEvent {
+  id String @id @default(cuid())
+
+  provider String
+  eventId  String
+  payload  Json
+
+  receivedAt  DateTime @default(now())
+  processedAt DateTime?
+
+  @@unique([provider, eventId])
+  @@index([provider])
+  @@index([receivedAt])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  PAST_DUE
+  CANCELED
+  INCOMPLETE
+}
+
+model Subscription {
+  id String @id @default(cuid())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productId String
+  status    SubscriptionStatus @default(ACTIVE)
+
+  currentPeriodStart DateTime
+  currentPeriodEnd   DateTime
+  cancelAtPeriodEnd  Boolean  @default(false)
+
+  // Поля для автопродления (рекуррентных платежей)
+  paymentMethodId  String?
+  autoRenewEnabled Boolean  @default(false)
+  lastRenewalError String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+}
+model ReferralConversion {
+  id String @id @default(cuid())
+
+  referrerId String
+  referrer   User   @relation("ReferrerConversions", fields: [referrerId], references: [id])
+
+  refereeId String?
+  referee   User?   @relation("RefereeConversions", fields: [refereeId], references: [id])
+
+  orderId String @unique
+  order   Order  @relation(fields: [orderId], references: [id])
+
+  rewardDays Int @default(30)
+  processedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([referrerId])
+  @@index([refereeId])
+}

@@ -26,10 +26,12 @@ export interface YooKassaPaymentParams {
     currency: string;
   };
   capture: boolean;
-  confirmation: {
+  confirmation?: {
     type: string;
     return_url: string;
   };
+  payment_method_id?: string;
+  save_payment_method?: boolean;
   description: string;
   metadata: Record<string, string>;
   receipt?: YooKassaReceipt;
@@ -38,7 +40,7 @@ export interface YooKassaPaymentParams {
 export interface YooKassaPaymentResponse {
   id: string;
   status: string;
-  confirmation: {
+  confirmation?: {
     confirmation_url: string;
   };
   paid: boolean;
@@ -47,6 +49,12 @@ export interface YooKassaPaymentResponse {
     currency: string;
   };
   metadata: Record<string, string>;
+  payment_method?: {
+    type: string;
+    id: string;
+    saved: boolean;
+    title?: string;
+  };
 }
 
 export interface YooKassaClientConfig {
@@ -117,12 +125,12 @@ export class YooKassaClient {
       return result;
     } catch (error) {
       clearTimeout(timeoutId);
-      
+
       // Обработка таймаута
       if (error instanceof Error && error.name === 'AbortError') {
         throw new Error('YooKassa API timeout: запрос превысил 30 секунд');
       }
-      
+
       // Пробрасываем другие ошибки
       throw error;
     }

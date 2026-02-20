@@ -9,6 +9,7 @@ import { serversRoutes } from './servers.js';
 import { contestRoutes } from './contest.js';
 import { referralRoutes } from './referral.js';
 import { adminRoutes } from './admin.js';
+import { promoRoutes } from './promo.js';
 
 export async function v1Routes(fastify: FastifyInstance) {
   // Rate limiting для всех роутов v1
@@ -31,6 +32,11 @@ export async function v1Routes(fastify: FastifyInstance) {
 
   // Регистрируем роуты для тарифов
   await fastify.register(tariffsRoutes, { prefix: '/tariffs' });
+
+  // Регистрируем роуты для промокодов
+  fastify.log.info('[v1] Registering promo routes...');
+  await fastify.register(promoRoutes, { prefix: '/promo' });
+  fastify.log.info('[v1] Promo routes registered successfully');
 
   // Регистрируем роуты для серверов (доступно всем)
   try {
@@ -62,4 +68,5 @@ export async function v1Routes(fastify: FastifyInstance) {
   } catch (error) {
     fastify.log.error({ err: error }, 'Failed to register admin routes');
   }
+
 }

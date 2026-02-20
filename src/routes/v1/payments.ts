@@ -7,6 +7,13 @@ import { createVerifyAuth } from '../../auth/verifyAuth.js';
 import { isYooKassaIP } from '../../config/yookassa.js';
 import { awardTicketsForPayment } from '../../storage/contestUtils.js';
 import { awardRetryScheduler } from '../../services/awardRetryScheduler.js';
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pg from 'pg';
+
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
 
 const yookassaWebhookSchema = z.object({
   type: z.literal('notification'),
@@ -15,7 +22,15 @@ const yookassaWebhookSchema = z.object({
     id: z.string(),
     status: z.string(),
     paid: z.boolean(),
-    metadata: z.object({ orderId: z.string() }).optional(),
+    metadata: z.object({
+      orderId: z.string(),
+      autoRenew: z.string().optional()
+    }).optional(),
+    payment_method: z.object({
+      id: z.string(),
+      saved: z.boolean(),
+      type: z.string()
+    }).optional()
   }),
 });
 
@@ -61,7 +76,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
       const orderRow = ordersRepo.getOrder(orderId);
       if (!orderRow) {
         fastify.log.warn({ orderId }, '[Webhook] Order not found in Core DB. Forwarding to Bot...');
-        
+
         try {
           // Пытаемся переслать вебхук в бота (предполагаем порт 3000)
           // Бот обрабатывает вебхук по пути /webhook/payment/yukassa
@@ -70,7 +85,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
         } catch (forwardErr: any) {
           fastify.log.error({ orderId, err: forwardErr.message }, '[Webhook] Failed to forward to Bot');
         }
-        
+
         return reply.status(200).send({ ok: true });
       }
 
@@ -107,9 +122,12 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
           else if (planId === 'plan_180') days = 180;
           else if (planId === 'plan_365') days = 365;
 
+          // Добавляем бонусные дни из промокода
+          const totalDays = days + (orderRow.bonus_days || 0);
+
           // ВЫЗЫВАЕМ НОВУЮ УНИВЕРСАЛЬНУЮ ФУНКЦИЮ
           // Она создаст юзера, если его нет, или продлит существующего
-          const vlessKey = await marzbanService.activateUser(tgId, days);
+          const vlessKey = await marzbanService.activateUser(tgId, totalDays);
 
           if (!vlessKey) {
             fastify.log.error({ tgId, orderId }, '[Webhook] activateUser returned empty key');
@@ -126,6 +144,57 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
             fastify.log.error({ tgId, orderId, keyLength: vlessKey.length }, '[Webhook] Failed to save key to order');
           } else {
             fastify.log.info({ tgId, orderId, keyLength: vlessKey.length }, '[Webhook] Key saved to order');
+          }
+
+          // Попытка сохранить токен для рекуррентных платежей (Фаза 2 Автопродление)
+          if (object.metadata?.autoRenew === 'true' && object.payment_method?.saved && object.payment_method?.id) {
+            fastify.log.info({ tgId, paymentMethodId: object.payment_method.id }, '[Webhook] Saving recurring payment method to Prisma');
+            try {
+              // Ищем пользователя по tgId
+              const prismaUser = await prisma.user.findUnique({
+                where: { vpnTgId: BigInt(tgId) }
+              });
+
+              if (prismaUser) {
+                // Создаем или обновляем подписку для этого пользователя с привязанной картой
+                const endDate = new Date(Date.now() + (totalDays * 86400 * 1000));
+
+                // Ищем активную подписку для этого плана, чтобы обновить, или создаем новую
+                const existingSub = await prisma.subscription.findFirst({
+                  where: { userId: prismaUser.id, productId: planId },
+                  orderBy: { createdAt: 'desc' }
+                });
+
+                if (existingSub) {
+                  await prisma.subscription.update({
+                    where: { id: existingSub.id },
+                    data: {
+                      paymentMethodId: object.payment_method.id,
+                      autoRenewEnabled: true,
+                      currentPeriodEnd: endDate,
+                      status: 'ACTIVE'
+                    }
+                  });
+                } else {
+                  await prisma.subscription.create({
+                    data: {
+                      userId: prismaUser.id,
+                      productId: planId,
+                      status: 'ACTIVE',
+                      currentPeriodStart: new Date(),
+                      currentPeriodEnd: endDate,
+                      paymentMethodId: object.payment_method.id,
+                      autoRenewEnabled: true
+                    }
+                  });
+                }
+                fastify.log.info({ tgId }, '[Webhook] Prisma updated with saved payment method');
+              } else {
+                fastify.log.warn({ tgId }, '[Webhook] User not found in Prisma, skipping payment method save');
+              }
+            } catch (prismaErr: any) {
+              fastify.log.error({ err: prismaErr.message }, '[Webhook] Failed to save payment method to Prisma');
+            }
           }
 
           // Начисляем билеты конкурса (покупателю и рефереру, если применимо)

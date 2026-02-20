@@ -53,10 +53,18 @@ function runMigrations(database: Database.Database): void {
       amount_value TEXT,
       amount_currency TEXT,
       key TEXT,
+      bonus_days INTEGER DEFAULT 0,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
   `);
+
+  // Добавляем колонку bonus_days, если её нет (для существующих баз)
+  try {
+    database.prepare("ALTER TABLE orders ADD COLUMN bonus_days INTEGER DEFAULT 0").run();
+  } catch (e) {
+    // Игнорируем ошибку, если колонка уже существует
+  }
 
   // Создаем таблицу payment_events
   database.exec(`

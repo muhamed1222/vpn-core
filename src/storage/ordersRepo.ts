@@ -8,6 +8,7 @@ export interface OrderRow {
   yookassa_payment_id: string | null;
   amount_value: string | null;
   amount_currency: string | null;
+  bonus_days: number;
   key: string | null;
   created_at: string;
   updated_at: string;
@@ -25,6 +26,7 @@ export function createOrder(params: {
   orderId: string;
   planId: string;
   userRef?: string;
+  bonusDays?: number;
 }): void {
   const db = getDatabase();
   const now = new Date().toISOString();
@@ -32,13 +34,14 @@ export function createOrder(params: {
   db.prepare(`
     INSERT INTO orders (
       order_id, user_ref, plan_id, status,
-      yookassa_payment_id, amount_value, amount_currency, key,
+      yookassa_payment_id, amount_value, amount_currency, bonus_days, key,
       created_at, updated_at
-    ) VALUES (?, ?, ?, 'pending', NULL, NULL, NULL, NULL, ?, ?)
+    ) VALUES (?, ?, ?, 'pending', NULL, NULL, NULL, ?, NULL, ?, ?)
   `).run(
     params.orderId,
-    params.userRef || '', // Пустая строка вместо NULL для NOT NULL поля
+    params.userRef || '',
     params.planId,
+    params.bonusDays || 0,
     now,
     now
   );
