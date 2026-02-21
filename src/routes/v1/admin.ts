@@ -110,7 +110,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
 
       const botDbPath = process.env.BOT_DATABASE_PATH;
       fastify.log.info({ botDbPath, contest_id }, '[Admin] Processing participants request');
-      
+
       if (!botDbPath) {
         return reply.status(404).send({
           error: 'Not Found',
@@ -124,13 +124,13 @@ export async function adminRoutes(fastify: FastifyInstance) {
         fastify.log.info('[Admin] Getting contest by ID from database');
         const db = new Database(process.env.DATABASE_PATH || './data/db.sqlite');
         db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
-        
+
         const contestRow = db.prepare(`
           SELECT id, title, starts_at, ends_at, attribution_window_days, rules_version, is_active
           FROM bot_db.contests
           WHERE id = ? AND is_active = 1
         `).get(contest_id) as any;
-        
+
         if (!contestRow) {
           db.close();
           fastify.log.warn({ requestedId: contest_id }, '[Admin] Contest not found or not active');
@@ -139,7 +139,7 @@ export async function adminRoutes(fastify: FastifyInstance) {
             message: 'Contest not found'
           });
         }
-        
+
         const contest = {
           id: contestRow.id,
           title: contestRow.title,
@@ -149,36 +149,54 @@ export async function adminRoutes(fastify: FastifyInstance) {
           rules_version: contestRow.rules_version,
           is_active: contestRow.is_active === 1
         };
-        
+
         fastify.log.info({ contest: { id: contest.id, title: contest.title } }, '[Admin] Contest found');
 
         // Получаем билеты напрямую из ticket_ledger
         fastify.log.info('[Admin] Getting tickets from ticket_ledger');
-        
+
         const ticketsRaw = db.prepare(`
           SELECT 
             referrer_id,
             referred_id,
             order_id,
-            created_at
+            MAX(created_at) as created_at,
+            SUM(delta) as total_delta
           FROM bot_db.ticket_ledger
           WHERE contest_id = ?
-          ORDER BY created_at DESC
+          GROUP BY referrer_id, referred_id, order_id
+          HAVING SUM(delta) > 0
+          ORDER BY MAX(created_at) DESC
         `).all(contest_id) as Array<{
           referrer_id: number;
           referred_id: number;
           order_id: string;
           created_at: string;
+          total_delta: number;
         }>;
-        
+
         db.close();
-        
-        const tickets = ticketsRaw.map(t => ({
-          referrer_id: t.referrer_id,
-          referred_id: t.referred_id,
-          order_id: t.order_id,
-          created_at: t.created_at
-        }));
+
+        const tickets: Array<any> = [];
+        for (const t of ticketsRaw) {
+          const count = t.total_delta;
+          for (let i = 0; i < count; i++) {
+            tickets.push({
+              referrer_id: t.referrer_id,
+              referred_id: t.referred_id,
+              order_id: t.order_id,
+              created_at: t.created_at
+            });
+          }
+        }
+
+        // Перемешиваем билеты (Fisher-Yates shuffle)
+        for (let i = tickets.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          const temp = tickets[i];
+          tickets[i] = tickets[j];
+          tickets[j] = temp;
+        }
 
         fastify.log.info({
           contestId: contest_id,

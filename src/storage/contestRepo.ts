@@ -105,10 +105,9 @@ export function getActiveContest(botDbPath: string): Contest | null {
         FROM bot_db.contests
         WHERE is_active = 1 
           AND starts_at <= ?
-          AND ends_at >= ?
         ORDER BY starts_at DESC
         LIMIT 1
-      `).get(now, now) as {
+      `).get(now) as {
         id: string;
         title: string;
         starts_at: string;
@@ -158,7 +157,7 @@ export function getActiveContest(botDbPath: string): Contest | null {
             is_active: c.is_active,
             starts_at: c.starts_at,
             ends_at: c.ends_at,
-            matches: c.is_active === 1 && c.starts_at <= now && c.ends_at >= now
+            matches: c.is_active === 1 && c.starts_at <= now
           }))
         });
         return null;

@@ -7,6 +7,7 @@ import { createVerifyAuth } from '../../auth/verifyAuth.js';
 import { isYooKassaIP } from '../../config/yookassa.js';
 import { awardTicketsForPayment } from '../../storage/contestUtils.js';
 import { awardRetryScheduler } from '../../services/awardRetryScheduler.js';
+import * as botRepo from '../../storage/botRepo.js';
 import { getPrisma } from '../../storage/prisma.js';
 
 const prisma = getPrisma();
@@ -19,7 +20,8 @@ const yookassaWebhookSchema = z.object({
     status: z.string(),
     paid: z.boolean(),
     metadata: z.object({
-      orderId: z.string(),
+      orderId: z.string().optional(),
+      order_id: z.string().optional(),
       autoRenew: z.string().optional()
     }).optional(),
     payment_method: z.object({
@@ -66,7 +68,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
         return reply.status(200).send({ ok: true });
       }
 
-      const orderId = object.metadata?.orderId;
+      const orderId = object.metadata?.orderId || object.metadata?.order_id;
       if (!orderId) return reply.status(200).send({ ok: true });
 
       const orderRow = ordersRepo.getOrder(orderId);
@@ -144,18 +146,22 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
 
           // Попытка сохранить токен для рекуррентных платежей (Фаза 2 Автопродление)
           if (object.metadata?.autoRenew === 'true' && object.payment_method?.saved && object.payment_method?.id) {
-            fastify.log.info({ tgId, paymentMethodId: object.payment_method.id }, '[Webhook] Saving recurring payment method to Prisma');
+            fastify.log.info({ tgId, paymentMethodId: object.payment_method.id }, '[Webhook] Saving recurring payment method');
+
+            // 1. Сохраняем в базу бота (SQLite) - всегда доступно
+            botRepo.saveBotPaymentMethod(tgId, object.payment_method.id);
+            botRepo.updateBotAutoRenewal(tgId, true);
+
+            // 2. Пытаемся сохранить в Prisma (Postgres) - если настроено
             try {
-              // Ищем пользователя по tgId
+              const prisma = getPrisma();
               const prismaUser = await prisma.user.findUnique({
                 where: { vpnTgId: BigInt(tgId) }
               });
 
               if (prismaUser) {
-                // Создаем или обновляем подписку для этого пользователя с привязанной картой
+                // ... rest ofprisma logic
                 const endDate = new Date(Date.now() + (totalDays * 86400 * 1000));
-
-                // Ищем активную подписку для этого плана, чтобы обновить, или создаем новую
                 const existingSub = await prisma.subscription.findFirst({
                   where: { userId: prismaUser.id, productId: planId },
                   orderBy: { createdAt: 'desc' }
@@ -186,10 +192,10 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
                 }
                 fastify.log.info({ tgId }, '[Webhook] Prisma updated with saved payment method');
               } else {
-                fastify.log.warn({ tgId }, '[Webhook] User not found in Prisma, skipping payment method save');
+                fastify.log.warn({ tgId }, '[Webhook] User not found in Prisma, skipping payment method save to Prisma');
               }
             } catch (prismaErr: any) {
-              fastify.log.error({ err: prismaErr.message }, '[Webhook] Failed to save payment method to Prisma');
+              fastify.log.warn({ err: prismaErr.message }, '[Webhook] Failed to save payment method to Prisma (continuing with SQLite)');
             }
           }
 

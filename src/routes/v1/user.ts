@@ -1,6 +1,8 @@
 import { FastifyInstance } from 'fastify';
 import { createVerifyAuth } from '../../auth/verifyAuth.js';
 import { getDevices, getDeviceById, revokeDevice } from '../../storage/devicesRepo.js';
+import * as botRepo from '../../storage/botRepo.js';
+import { getPrisma } from '../../storage/prisma.js';
 import { MarzbanService } from '../../integrations/marzban/service.js';
 import fs from 'fs';
 
@@ -62,6 +64,8 @@ export async function userRoutes(fastify: FastifyInstance) {
       expiresAt: status?.expire ? status.expire * 1000 : null,
       usedTraffic: (status && typeof status.used_traffic === 'number') ? status.used_traffic : 0,
       dataLimit: (status && typeof status.data_limit === 'number') ? status.data_limit : 0,
+      note: status?.note || '',
+      marzbanUsername: status?.username || '',
       discount: await (async () => {
         const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
         if (fs.existsSync(botDbPath)) {
@@ -122,7 +126,6 @@ export async function userRoutes(fastify: FastifyInstance) {
 
     if (success) {
       // Уведомляем бота об успешном продлении (best effort, не ждем)
-      // Это нужно, чтобы бот отправил сообщение пользователю и обновил свою локальную SQLite
       const BOT_API_URL = process.env.BOT_API_URL || 'http://127.0.0.1:3000';
       const adminApiKey = process.env.ADMIN_API_KEY || '';
 
@@ -217,7 +220,6 @@ export async function userRoutes(fastify: FastifyInstance) {
 
     try {
       const userRef = `tg_${targetTgId}`;
-      // Use getDevices (new method)
       const dbDevices: any[] = getDevices(userRef);
 
       if (dbDevices.length > 0) {
@@ -225,7 +227,7 @@ export async function userRoutes(fastify: FastifyInstance) {
         const FIVE_MINUTES = 5 * 60 * 1000;
 
         const devices = dbDevices.map(d => ({
-          id: d.id, // now using PK
+          id: d.id,
           name: d.device_name,
           platform: d.platform,
           app: d.device_name.split(' ')[0],
@@ -270,7 +272,6 @@ export async function userRoutes(fastify: FastifyInstance) {
     const device = getDeviceById(deviceId);
     if (!device) return reply.status(404).send({ error: 'Device not found' });
 
-    // Check ownership
     const userRef = `tg_${request.user.tgId}`;
     if (device.vpn_key_id !== userRef && !request.user.isAdmin) {
       return reply.status(403).send({ error: 'Forbidden' });
@@ -310,19 +311,35 @@ export async function userRoutes(fastify: FastifyInstance) {
 
     if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
 
-    const { getPrisma } = await import('../../storage/prisma.js');
-    const prisma = getPrisma();
+    let status = { enabled: false, canEnable: false };
 
-    const user = await prisma.user.findUnique({
-      where: { vpnTgId: BigInt(targetTgId) },
-      include: { subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 } }
-    });
+    // 1. Пытаемся получить из Prisma (база для веб)
+    try {
+      const prisma = getPrisma();
+      const user = await prisma.user.findUnique({
+        where: { vpnTgId: BigInt(targetTgId) },
+        include: { subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 } }
+      });
 
-    const activeSub = user?.subscriptions[0];
-    return reply.send({
-      enabled: activeSub ? activeSub.autoRenewEnabled : false,
-      canEnable: !!activeSub?.paymentMethodId
-    });
+      const activeSub = user?.subscriptions[0];
+      if (activeSub) {
+        status.enabled = activeSub.autoRenewEnabled;
+        status.canEnable = !!activeSub.paymentMethodId;
+      }
+    } catch (e) {
+      // Игнорируем ошибку подключения к Prisma, идем в SQLite
+    }
+
+    // 2. Если в Prisma нет или она недоступна, проверяем базу бота
+    if (!status.canEnable) {
+      const botStatus = botRepo.getBotAutoRenewal(targetTgId);
+      if (botStatus) {
+        status.enabled = botStatus.enabled;
+        status.canEnable = !!botStatus.paymentMethodId;
+      }
+    }
+
+    return reply.send(status);
   });
 
   // POST /v1/user/autorenewal
@@ -335,28 +352,50 @@ export async function userRoutes(fastify: FastifyInstance) {
 
     if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
 
-    const { getPrisma } = await import('../../storage/prisma.js');
-    const prisma = getPrisma();
+    let success = false;
+    let finalEnabled = enabled;
 
-    const user = await prisma.user.findUnique({
-      where: { vpnTgId: BigInt(targetTgId) },
-      include: { subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 } }
-    });
+    // 1. Проверяем наличие карты в обеих базах
+    const botStatus = botRepo.getBotAutoRenewal(targetTgId);
+    let hasCard = !!botStatus?.paymentMethodId;
 
-    const activeSub = user?.subscriptions[0];
-    if (!activeSub) {
-      return reply.status(404).send({ error: 'No subscription found' });
+    // 2. Пытаемся обновить в Prisma
+    try {
+      const prisma = getPrisma();
+      const user = await prisma.user.findUnique({
+        where: { vpnTgId: BigInt(targetTgId) },
+        include: { subscriptions: { orderBy: { createdAt: 'desc' }, take: 1 } }
+      });
+
+      const activeSub = user?.subscriptions[0];
+      if (activeSub) {
+        if (activeSub.paymentMethodId) hasCard = true;
+
+        if (!(enabled && !hasCard)) {
+          const updated = await prisma.subscription.update({
+            where: { id: activeSub.id },
+            data: { autoRenewEnabled: enabled }
+          });
+          finalEnabled = updated.autoRenewEnabled;
+          success = true;
+        }
+      }
+    } catch (e) {
+      // Пропускаем Prisma если она упала
     }
 
-    if (enabled && !activeSub.paymentMethodId) {
+    // 3. Также обновляем в базе бота
+    if (enabled && !hasCard) {
       return reply.status(400).send({ error: 'No saved payment method' });
     }
 
-    const updated = await prisma.subscription.update({
-      where: { id: activeSub.id },
-      data: { autoRenewEnabled: enabled }
-    });
+    const botUpdated = botRepo.updateBotAutoRenewal(targetTgId, enabled);
+    if (botUpdated) success = true;
 
-    return reply.send({ enabled: updated.autoRenewEnabled });
+    if (!success) {
+      return reply.status(404).send({ error: 'Subscription not found' });
+    }
+
+    return reply.send({ enabled: finalEnabled });
   });
 }

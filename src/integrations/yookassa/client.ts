@@ -135,5 +135,26 @@ export class YooKassaClient {
       throw error;
     }
   }
+
+  async getPayment(paymentId: string): Promise<YooKassaPaymentResponse> {
+    const auth = Buffer.from(`${this.shopId}:${this.secretKey}`).toString('base64');
+
+    try {
+      const response = await fetch(`${this.baseUrl}/payments/${paymentId}`, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`YooKassa API error: ${response.status} ${response.statusText}. Details: ${errorText}`);
+      }
+
+      return await response.json() as YooKassaPaymentResponse;
+    } catch (error) {
+      throw error;
+    }
+  }
 }
 

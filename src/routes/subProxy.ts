@@ -133,7 +133,10 @@ async function getCountry(ip: string): Promise<string | null> {
 }
 
 export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
-    const MARZBAN_URL = process.env.MARZBAN_API_URL || 'http://127.0.0.1:8000';
+    // ВАЖНО: Мы должны ходить к Marzban напрямую (через внутренний порт 8000),
+    // иначе, если мы пойдем по публичному `https://vpn.outlivion.space/sub/...`,
+    // NGINX снова перенаправит запрос обратно в этот же прокси, создавая бесконечный цикл.
+    const MARZBAN_URL = process.env.MARZBAN_INTERNAL_URL || 'http://127.0.0.1:8000';
 
     const handleProxy = async (request: FastifyRequest<{ Params: { token: string } }>, reply: FastifyReply, isInfo = false) => {
         const { token } = request.params;
@@ -186,6 +189,7 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
             return reply.status(response.status).send(transformedBody);
 
         } catch (err: any) {
+            fastify.log.error({ err }, '[SubProxy] Failed to proxy request');
             return reply.status(502).send('Bad Gateway');
         }
     };

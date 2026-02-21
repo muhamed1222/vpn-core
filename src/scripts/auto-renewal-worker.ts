@@ -13,6 +13,10 @@ import { join } from 'path';
 const envPath = join(process.cwd(), '.env');
 dotenv.config({ path: envPath });
 
+import { getDatabase, initDatabase } from '../storage/db.js';
+import * as fs from 'fs';
+import { getBotDbPath } from '../storage/botRepo.js';
+
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
@@ -136,6 +140,78 @@ export async function processAutoRenewals() {
             }
         }
 
+        // 2. SWEEP SQLITE (Bot database)
+        try {
+            const botDbPath = getBotDbPath();
+            if (fs.existsSync(botDbPath)) {
+                console.log(`[AutoRenewalWorker] Sweeping SQLite bot DB: ${botDbPath}`);
+                const db = getDatabase();
+                try {
+                    db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+
+                    // Find users with auto-renewal enabled and card saved in SQLite
+                    // and expiring in next 24h
+                    const nowMs = Date.now();
+                    const tomorrowMs = nowMs + 24 * 60 * 60 * 1000;
+
+                    const botSubs = db.prepare(`
+                    SELECT ar.user_id, ar.plan_id, s.payment_method_id, s.expires_at
+                    FROM bot_db.auto_renewals ar
+                    JOIN bot_db.subscriptions s ON s.user_id = ar.user_id
+                    WHERE ar.enabled = 1 
+                      AND s.payment_method_id IS NOT NULL 
+                      AND s.expires_at > ? 
+                      AND s.expires_at < ?
+                `).all(nowMs / 1000, tomorrowMs / 1000) as any[];
+
+                    console.log(`[AutoRenewalWorker] Found ${botSubs.length} bot subscriptions due for renewal.`);
+
+                    for (const sub of botSubs) {
+                        const tgId = sub.user_id;
+                        const planId = sub.plan_id || 'plan_30';
+                        const amount = getPlanPrice(planId);
+                        const newOrderId = uuidv4();
+
+                        console.log(`[AutoRenewalWorker] [Bot] Charging ${amount.value} RUB for user ${tgId}, plan ${planId}`);
+
+                        try {
+                            const paymentParams: any = {
+                                amount: { value: amount.value, currency: amount.currency },
+                                capture: true,
+                                payment_method_id: sub.payment_method_id,
+                                description: `Автопродление подписки: Тариф ${planId}`,
+                                metadata: {
+                                    orderId: newOrderId,
+                                    autoRenew: 'true',
+                                    planId: planId,
+                                    tgId: tgId.toString()
+                                }
+                            };
+
+                            await yookassaClient.createPayment(paymentParams, newOrderId);
+                            await notifyUser(tgId, `🔄 Выполняется автопродление вашей подписки...\nСумма: ${amount.value} RUB`);
+                        } catch (chargeErr: any) {
+                            console.error(`[AutoRenewalWorker] [Bot] Charge failed for user ${tgId}:`, chargeErr.message);
+
+                            // Disable auto-renewal on failure
+                            db.prepare('UPDATE bot_db.auto_renewals SET enabled = 0 WHERE user_id = ?').run(tgId);
+
+                            await notifyUser(
+                                tgId,
+                                `⚠️ <b>Ошибка автопродления</b>\n\nНе удалось списать ${amount.value} RUB с вашей сохраненной карты. Автопродление <b>ОТКЛЮЧЕНО</b>.\n\nПожалуйста, оплатите подписку вручную!`
+                            );
+                        }
+                    }
+
+                    db.prepare('DETACH DATABASE bot_db').run();
+                } catch (sqErr: any) {
+                    console.error('[AutoRenewalWorker] SQLite sweep error:', sqErr.message);
+                    try { db.prepare('DETACH DATABASE bot_db').run(); } catch (e) { }
+                }
+            }
+        } catch (botErr: any) {
+            console.error('[AutoRenewalWorker] Bot DB sweep error:', botErr.message);
+        }
     } catch (error) {
         console.error('[AutoRenewalWorker] Global error during renewal sweep:', error);
     }
