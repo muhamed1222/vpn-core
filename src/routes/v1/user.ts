@@ -142,6 +142,7 @@ export async function userRoutes(fastify: FastifyInstance) {
           await axios.post(`${BOT_API_URL}/api/internal/activate-external-order`, {
             tgId,
             planId,
+            amount: 0,
             orderId: `core_${Date.now()}_${tgId}`
           }, {
             headers: { 'x-admin-api-key': adminApiKey },
