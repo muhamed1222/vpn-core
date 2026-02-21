@@ -289,9 +289,8 @@ export function initWorker() {
     });
 }
 
-import { fileURLToPath } from 'url';
 // @ts-ignore
-const isMain = process.argv[1] === fileURLToPath(import.meta.url);
+const isMain = typeof require !== 'undefined' && require.main === module;
 if (isMain) {
     Promise.all([
         processAutoRenewals(),

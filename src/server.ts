@@ -10,6 +10,7 @@ import { initDatabase, closeDatabase } from './storage/db.js';
 import { initDevicesTable } from './storage/devicesRepo.js';
 import { YooKassaClient } from './integrations/yookassa/client.js';
 import { MarzbanService } from './integrations/marzban/service.js';
+import { initWorker } from './scripts/auto-renewal-worker.js';
 
 // Загружаем переменные окружения
 // Указываем явный путь к .env файлу для надежности
@@ -167,7 +168,6 @@ const start = async () => {
     console.log(fastify.printRoutes());
 
     // Initialize auto renewal worker
-    const { initWorker } = await import('./scripts/auto-renewal-worker.js');
     initWorker();
 
     await fastify.listen({ host: HOST, port: PORT });
