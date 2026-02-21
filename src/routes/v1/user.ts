@@ -58,6 +58,52 @@ export async function userRoutes(fastify: FastifyInstance) {
       status.status === 'active' &&
       (!status.expire || status.expire === 0 || status.expire > now);
 
+    let discount = null;
+    let trialAvailable = true;
+
+    const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
+    if (fs.existsSync(botDbPath)) {
+      try {
+        const { getDatabase } = await import('../../storage/db.js');
+        const db = getDatabase();
+
+        // Safe attach with ignore if already attached
+        try {
+          db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+        } catch (e: any) {
+          if (!e.message.includes('attached')) throw e;
+        }
+
+        const userRow = db.prepare(`
+          SELECT discount_percent, discount_expires_at 
+          FROM bot_db.users 
+          WHERE id = ?
+        `).get(targetTgId) as any;
+
+        if (userRow && userRow.discount_percent && (!userRow.discount_expires_at || userRow.discount_expires_at > Date.now())) {
+          discount = { percent: userRow.discount_percent, expiresAt: userRow.discount_expires_at };
+        }
+
+        const countRow = db.prepare(`
+          SELECT count(*) as count
+          FROM bot_db.orders 
+          WHERE user_id = ? AND (status = 'paid' OR status = 'completed' OR status = 'PAID' OR status = 'COMPLETED')
+        `).get(targetTgId) as any;
+
+        if (countRow && countRow.count > 0) {
+          trialAvailable = false;
+        }
+      } catch (e) {
+        fastify.log.error(e, 'Failed to fetch bot data for status');
+      } finally {
+        try {
+          const { getDatabase } = await import('../../storage/db.js');
+          const db = getDatabase();
+          db.prepare('DETACH DATABASE bot_db').run();
+        } catch { }
+      }
+    }
+
     return reply.send({
       ok: !!isActive,
       status: isActive ? 'active' : (status?.status || 'disabled'),
@@ -66,28 +112,8 @@ export async function userRoutes(fastify: FastifyInstance) {
       dataLimit: (status && typeof status.data_limit === 'number') ? status.data_limit : 0,
       note: status?.note || '',
       marzbanUsername: status?.username || '',
-      discount: await (async () => {
-        const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
-        if (fs.existsSync(botDbPath)) {
-          try {
-            const { getDatabase } = await import('../../storage/db.js');
-            const db = getDatabase();
-            db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
-            const userRow = db.prepare(`
-              SELECT discount_percent, discount_expires_at 
-              FROM bot_db.users 
-              WHERE id = ?
-            `).get(targetTgId) as any;
-            db.prepare('DETACH DATABASE bot_db').run();
-            if (userRow && userRow.discount_percent && (!userRow.discount_expires_at || userRow.discount_expires_at > Date.now())) {
-              return { percent: userRow.discount_percent, expiresAt: userRow.discount_expires_at };
-            }
-          } catch (e) {
-            fastify.log.error(e, 'Failed to fetch discount for status');
-          }
-        }
-        return null;
-      })(),
+      discount,
+      trialAvailable
     });
   });
 
