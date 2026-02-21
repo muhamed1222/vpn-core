@@ -2,7 +2,7 @@
 # Скрипт для синхронизации изменений VPN API на сервер
 
 SERVER="root@72.56.93.135"
-SERVER_PATH="/root/vpn-core"
+SERVER_PATH="/root/vpn_api"
 
 echo "📤 Синхронизация файлов VPN API на сервер..."
 echo ""
@@ -12,6 +12,9 @@ FILES=(
   "src/auth/telegram.ts"
   "src/auth/telegramPhoto.ts"
   "src/routes/v1/auth.ts"
+  "src/routes/v1/user.ts"
+  "src/routes/v1/payments.ts"
+  "src/integrations/marzban/service.ts"
 )
 
 # Копирование файлов
@@ -30,7 +33,7 @@ echo ""
 echo "✅ Все файлы скопированы!"
 echo ""
 echo "🔄 Перезапуск API на сервере..."
-ssh "$SERVER" "cd $SERVER_PATH && npm run build && pm2 restart VPN API && pm2 logs VPN API --lines 10 --nostream"
+ssh "$SERVER" "cd $SERVER_PATH && npm run build && pm2 restart \"VPN API\" && pm2 logs \"VPN API\" --lines 10 --nostream"
 
 echo ""
 echo "✅ Синхронизация завершена!"

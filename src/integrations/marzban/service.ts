@@ -112,7 +112,8 @@ export class MarzbanService {
       } else {
         // Если уже активен — просто продлеваем срок
         console.log(`[MarzbanService] [WRITE] Adding time to user ${user.username}`);
-        const newExpire = (user.expire || now) + (days * 86400);
+        const baseExpire = (user.expire && user.expire > now) ? user.expire : now;
+        const newExpire = baseExpire + (days * 86400);
         user = await this.client.updateUser(user.username, {
           ...user,
           expire: newExpire
@@ -141,6 +142,18 @@ export class MarzbanService {
     });
 
     return url;
+  }
+
+  async deactivateUser(tgId: number): Promise<boolean> {
+    const user = await this.findUser(tgId);
+    if (!user) return false;
+
+    console.log(`[MarzbanService] [WRITE] Deactivating user ${user.username}`);
+    await this.client.updateUser(user.username, {
+      ...user,
+      status: 'disabled'
+    });
+    return true;
   }
 
   async getUserStatus(tgId: number): Promise<MarzbanUser | null> {

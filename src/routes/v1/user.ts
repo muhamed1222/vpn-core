@@ -61,7 +61,7 @@ export async function userRoutes(fastify: FastifyInstance) {
     return reply.send({
       ok: !!isActive,
       status: isActive ? 'active' : (status?.status || 'disabled'),
-      expiresAt: status?.expire ? status.expire * 1000 : null,
+      expiresAt: status?.expire ? (status.expire > 10000000000 ? status.expire : status.expire * 1000) : null,
       usedTraffic: (status && typeof status.used_traffic === 'number') ? status.used_traffic : 0,
       dataLimit: (status && typeof status.data_limit === 'number') ? status.data_limit : 0,
       note: status?.note || '',
@@ -218,7 +218,7 @@ export async function userRoutes(fastify: FastifyInstance) {
       planName: null,
       period: {
         start: null,
-        end: expire ? expire * 1000 : null,
+        end: expire ? (expire > 10000000000 ? expire : expire * 1000) : null,
       },
     });
   });

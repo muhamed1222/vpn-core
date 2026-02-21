@@ -99,3 +99,34 @@ export function saveBotPaymentMethod(tgId: number, paymentMethodId: string) {
         return false;
     }
 }
+
+/**
+ * Продлить подписку в базе бота (для автопродления)
+ */
+export function extendBotSubscription(tgId: number, addDays: number) {
+    const db = getDatabase();
+    const botDbPath = getBotDbPath();
+
+    if (!fs.existsSync(botDbPath)) return false;
+
+    try {
+        db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
+
+        const sub = db.prepare('SELECT expires_at FROM bot_db.subscriptions WHERE user_id = ?').get(tgId) as { expires_at: number } | undefined;
+        if (sub) {
+            // Если подписка уже истекла, считаем от текущего времени, иначе прибавляем к expires_at
+            const nowSeconds = Math.floor(Date.now() / 1000);
+            const baseTime = sub.expires_at > nowSeconds ? sub.expires_at : nowSeconds;
+            const newExpiresAt = baseTime + (addDays * 24 * 60 * 60);
+
+            db.prepare('UPDATE bot_db.subscriptions SET expires_at = ?, is_active = 1 WHERE user_id = ?')
+                .run(newExpiresAt, tgId);
+        }
+
+        db.prepare('DETACH DATABASE bot_db').run();
+        return true;
+    } catch (e) {
+        try { db.prepare('DETACH DATABASE bot_db').run(); } catch (de) { }
+        return false;
+    }
+}

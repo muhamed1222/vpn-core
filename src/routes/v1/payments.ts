@@ -22,7 +22,11 @@ const yookassaWebhookSchema = z.object({
     metadata: z.object({
       orderId: z.string().optional(),
       order_id: z.string().optional(),
-      autoRenew: z.string().optional()
+      autoRenew: z.string().optional(),
+      type: z.string().optional(),
+      subscriptionId: z.string().optional(),
+      planId: z.string().optional(),
+      tgId: z.string().optional()
     }).optional(),
     payment_method: z.object({
       id: z.string(),
@@ -64,12 +68,121 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
       }
 
       const { event, object } = validationResult.data;
+      const meta = object.metadata;
+
+      // Обработка отмененных платежей для автопродления
+      if (event === 'payment.canceled') {
+        if (meta?.type === 'auto_renewal') {
+          try {
+            if (meta.subscriptionId && !meta.subscriptionId.startsWith('bot_')) {
+              const subDb = getPrisma();
+              await subDb.subscription.update({
+                where: { id: meta.subscriptionId },
+                data: { status: 'PAST_DUE' }
+              });
+              fastify.log.info({ orderId: meta.orderId }, '[Webhook] Auto-renewal canceled, marked as PAST_DUE in Prisma');
+            } else if (meta.tgId || meta.subscriptionId?.startsWith('bot_')) {
+              const tgId = meta.tgId || meta.subscriptionId?.replace('bot_', '');
+              if (tgId) {
+                botRepo.updateBotAutoRenewal(Number(tgId), false);
+                fastify.log.info({ orderId: meta.orderId, tgId }, '[Webhook] Auto-renewal canceled for bot user, disabled in SQLite');
+              }
+            }
+          } catch (err: any) {
+            fastify.log.error({ err: err.message }, '[Webhook] Failed to mark canceled auto-renewal as PAST_DUE');
+          }
+        }
+        return reply.status(200).send({ ok: true });
+      }
+
       if (event !== 'payment.succeeded' || object.status !== 'succeeded') {
         return reply.status(200).send({ ok: true });
       }
 
-      const orderId = object.metadata?.orderId || object.metadata?.order_id;
+      const orderId = meta?.orderId || meta?.order_id;
       if (!orderId) return reply.status(200).send({ ok: true });
+
+      // Логика автопродления
+      if (meta?.type === 'auto_renewal' && (meta.subscriptionId || meta.tgId)) {
+        fastify.log.info({ orderId }, '[Webhook] Processing AUTO_RENEWAL succeeding');
+        try {
+          let addDays = 30;
+          if (meta.planId === 'plan_7') addDays = 7;
+          else if (meta.planId === 'plan_90') addDays = 90;
+          else if (meta.planId === 'plan_180') addDays = 180;
+          else if (meta.planId === 'plan_365') addDays = 365;
+
+          // 1. Prisma (Web DB)
+          if (meta.subscriptionId && !meta.subscriptionId.startsWith('bot_')) {
+            const subDb = getPrisma();
+            const sub = await subDb.subscription.findUnique({
+              where: { id: meta.subscriptionId },
+              include: { user: true }
+            });
+
+            if (sub) {
+              const newPeriodEnd = new Date(sub.currentPeriodEnd);
+              newPeriodEnd.setDate(newPeriodEnd.getDate() + addDays);
+
+              await subDb.subscription.update({
+                where: { id: sub.id },
+                data: {
+                  status: 'ACTIVE',
+                  currentPeriodStart: sub.currentPeriodEnd,
+                  currentPeriodEnd: newPeriodEnd,
+                }
+              });
+
+              if (sub.user?.vpnTgId) {
+                await marzbanService.activateUser(Number(sub.user.vpnTgId), addDays);
+
+                if (botToken) {
+                  const expireDateStr = newPeriodEnd.toLocaleDateString('ru-RU');
+                  await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    chat_id: Number(sub.user.vpnTgId),
+                    text: `✅ <b>Оплата получена! Ваша подписка автоматически продлена.</b>\n\n` +
+                      `🟢 Статус: <b>Активна</b>\n` +
+                      `🕓 Действует до: <b>${expireDateStr}</b>\n\n` +
+                      `Спасибо, что остаетесь с нами!`,
+                    parse_mode: 'HTML'
+                  }).catch(() => { });
+                }
+              }
+              fastify.log.info({ orderId, subId: sub.id }, '[Webhook] Auto-renewal successful for Prisma user');
+            }
+          }
+          // 2. SQLite (Bot DB)
+          else {
+            const tgId = meta.tgId || meta.subscriptionId?.replace('bot_', '');
+            if (tgId) {
+              const tgIdNum = Number(tgId);
+              // Обновляем даты в боте
+              botRepo.extendBotSubscription(tgIdNum, addDays);
+              // Активируем в Marzban
+              await marzbanService.activateUser(tgIdNum, addDays);
+
+              if (botToken) {
+                const newExpiresAt = new Date();
+                newExpiresAt.setDate(newExpiresAt.getDate() + addDays);
+                const expireDateStr = newExpiresAt.toLocaleDateString('ru-RU');
+
+                await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                  chat_id: tgIdNum,
+                  text: `✅ <b>Оплата получена! Ваша подписка автоматически продлена.</b>\n\n` +
+                    `🟢 Статус: <b>Активна</b>\n` +
+                    `🕓 Действует примерно до: <b>${expireDateStr}</b>\n\n` +
+                    `Спасибо, что остаетесь с нами!`,
+                  parse_mode: 'HTML'
+                }).catch(() => { });
+              }
+              fastify.log.info({ orderId, tgId }, '[Webhook] Auto-renewal successful for Bot SQLite user');
+            }
+          }
+        } catch (err: any) {
+          fastify.log.error({ err: err.message }, '[Webhook] Failed to process auto-renewal');
+        }
+        return reply.status(200).send({ ok: true });
+      }
 
       const orderRow = ordersRepo.getOrder(orderId);
       if (!orderRow) {
@@ -309,7 +422,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
 
           // Отправляем уведомление пользователю
           if (botToken) {
-            const expireDate = new Date(Date.now() + (days * 86400 * 1000)).toLocaleDateString('ru-RU');
+            const expireDate = new Date(Date.now() + (totalDays * 86400 * 1000)).toLocaleDateString('ru-RU');
             await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
               chat_id: tgId,
               text: `✅ <b>Оплата получена! Ваша подписка активирована.</b>\n\n` +

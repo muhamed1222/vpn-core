@@ -166,6 +166,10 @@ const start = async () => {
     console.log('Registered routes:');
     console.log(fastify.printRoutes());
 
+    // Initialize auto renewal worker
+    const { initWorker } = await import('./scripts/auto-renewal-worker.js');
+    initWorker();
+
     await fastify.listen({ host: HOST, port: PORT });
     fastify.log.info(`Server listening on http://${HOST}:${PORT}`);
   } catch (error) {
