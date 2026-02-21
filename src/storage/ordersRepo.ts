@@ -98,10 +98,10 @@ export function markPaidWithKey(params: {
     return false;
   }
 
-  // Идемпотентная операция: если уже paid и key есть, ничего не делаем
+  // Идемпотентная операция: если уже paid и ТАКОЙ ЖЕ key есть, ничего не делаем
   const order = getOrder(params.orderId);
-  if (order && order.status === 'paid' && order.key && order.key.trim() !== '') {
-    console.log(`[ordersRepo] markPaidWithKey: order ${params.orderId} already has key`);
+  if (order && order.status === 'paid' && order.key === params.key) {
+    console.log(`[ordersRepo] markPaidWithKey: order ${params.orderId} already has this key`);
     return true; // Уже обработано
   }
 

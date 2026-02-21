@@ -91,6 +91,8 @@ export async function userRoutes(fastify: FastifyInstance) {
     });
   });
 
+  const regenerateRateLimit = new Map<number, number>();
+
   // POST /v1/user/regenerate
   fastify.post('/regenerate', { preHandler: verifyAuth }, async (request, reply) => {
     if (!request.user) return reply.status(401).send({ error: 'Unauthorized' });
@@ -100,6 +102,15 @@ export async function userRoutes(fastify: FastifyInstance) {
     const targetTgId = request.user.isAdmin && tgIdParam ? tgIdParam : request.user.tgId;
 
     if (!targetTgId) return reply.status(400).send({ error: 'Missing Telegram ID' });
+
+    // Rate limiting (5 minutes)
+    const now = Date.now();
+    const lastRegen = regenerateRateLimit.get(targetTgId);
+    if (lastRegen && now - lastRegen < 5 * 60 * 1000) {
+      const waitMinutes = Math.ceil((5 * 60 * 1000 - (now - lastRegen)) / 60000);
+      return reply.status(429).send({ error: `Too many requests. Please wait ${waitMinutes} minute(s) before trying again.` });
+    }
+    regenerateRateLimit.set(targetTgId, now);
 
     const config = await marzbanService.regenerateUser(targetTgId);
 
@@ -112,6 +123,9 @@ export async function userRoutes(fastify: FastifyInstance) {
       if (lastPaidOrder) {
         markPaidWithKey({ orderId: lastPaidOrder.order_id, key: config });
       }
+    } else {
+      // If regeneration failed, we remove the rate limit so they can try again.
+      regenerateRateLimit.delete(targetTgId);
     }
 
     return reply.send({ ok: true, config });
