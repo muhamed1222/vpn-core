@@ -28,7 +28,11 @@ export function isYooKassaIP(ip: string): boolean {
 
   for (const entry of YOOKASSA_WEBHOOK_IPS) {
     if (entry.includes('/')) {
-      if (!normalizedIp.includes(':') && isInCIDR(normalizedIp, entry)) {
+      // Пропускаем IPv6-CIDR при проверке IPv4-адреса и наоборот
+      const isIpv6Entry = entry.includes(':');
+      const isIpv6Ip = normalizedIp.includes(':');
+      if (isIpv6Entry !== isIpv6Ip) continue;
+      if (!isIpv6Entry && isInCIDR(normalizedIp, entry)) {
         return true;
       }
     } else {
