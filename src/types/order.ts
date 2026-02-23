@@ -16,8 +16,8 @@ export interface CreateOrderRequest {
 
 export interface CreateOrderResponse {
   orderId: string;
-  status: 'pending';
-  paymentUrl: string;
+  status: 'pending' | 'paid';
+  paymentUrl?: string;
 }
 
 export interface GetOrderResponse {

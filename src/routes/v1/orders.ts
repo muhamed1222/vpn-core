@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getPlanPrice } from '../../config/plans.js';
 import * as ordersRepo from '../../storage/ordersRepo.js';
 import { createVerifyAuth } from '../../auth/verifyAuth.js';
-import fs from 'fs';
+import { botHasPaidOrder, getBotUserDiscount } from '../../storage/botRepo.js';
 
 const createOrderSchema = z.object({
   planId: z.string().min(1),
@@ -94,34 +94,13 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         }
 
         // Дополнительная проверка через базу бота
-        const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
-        if (fs.existsSync(botDbPath)) {
-          try {
-            const { getDatabase } = await import('../../storage/db.js');
-            const db = getDatabase();
-            try {
-              db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
-              const botPaidOrder = db.prepare(`
-                SELECT 1 FROM bot_db.orders 
-                WHERE user_id = ? AND status IN ('PAID', 'COMPLETED') 
-                LIMIT 1
-              `).get(request.user.tgId || tgId);
-
-              if (botPaidOrder) {
-                db.prepare('DETACH DATABASE bot_db').run();
-                fastify.log.warn({ tgId: request.user.tgId || tgId, planId }, '[Orders] User tried to buy plan_7 but has paid orders in bot DB');
-                return reply.status(400).send({
-                  error: 'Trial plan unavailable',
-                  message: 'Пробная подписка доступна только один раз. Выберите другой тариф.'
-                });
-              }
-              db.prepare('DETACH DATABASE bot_db').run();
-            } catch (attachError) {
-              fastify.log.warn({ err: attachError }, 'Failed to check bot database');
-            }
-          } catch (e) {
-            fastify.log.error({ err: e }, 'Error checking trial availability in bot database');
-          }
+        const botTgId = request.user.tgId || tgId;
+        if (botTgId && botHasPaidOrder(botTgId)) {
+          fastify.log.warn({ tgId: botTgId, planId }, '[Orders] User tried to buy plan_7 but has paid orders in bot DB');
+          return reply.status(400).send({
+            error: 'Trial plan unavailable',
+            message: 'Пробная подписка доступна только один раз. Выберите другой тариф.'
+          });
         }
       }
 
@@ -139,45 +118,29 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         userRef = `tg_${request.user.tgId}`;
       }
 
+      // Идемпотентность: если клиент прислал X-Idempotency-Key, проверяем кэш
+      const clientIdempotencyKey = request.headers['x-idempotency-key'] as string | undefined;
+      if (clientIdempotencyKey) {
+        const existingOrder = ordersRepo.getOrderByIdempotencyKey(clientIdempotencyKey);
+        if (existingOrder) {
+          fastify.log.info({ orderId: existingOrder.order_id, clientIdempotencyKey }, 'Returning cached order for idempotency key');
+          const cachedResponse: CreateOrderResponse = {
+            orderId: existingOrder.order_id,
+            status: existingOrder.status === 'paid' ? 'paid' : 'pending',
+            ...(existingOrder.payment_url ? { paymentUrl: existingOrder.payment_url } : {}),
+          };
+          return reply.status(200).send(cachedResponse);
+        }
+      }
+
       const orderId = uuidv4();
-      const idempotenceKey = uuidv4(); // Уникальный ключ для каждого запроса
+      const idempotenceKey = uuidv4(); // Уникальный ключ для YooKassa API
 
       // Определяем сумму по planId
       let amount = getPlanPrice(planId);
 
       // Проверяем скидку пользователя из базы бота
-      const botDbPath = process.env.BOT_DATABASE_PATH || '/root/vpn-bot/data/database.sqlite';
-      let discountPercent = 0;
-
-      if (fs.existsSync(botDbPath)) {
-        try {
-          const { getDatabase } = await import('../../storage/db.js');
-          const db = getDatabase();
-          try {
-            db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
-            const userRow = db.prepare(`
-              SELECT discount_percent, discount_expires_at 
-              FROM bot_db.users 
-              WHERE id = ?
-            `).get(request.user.tgId || tgId) as any;
-
-            if (userRow) {
-              const now = Date.now();
-              // Проверяем, не истекла ли скидка
-              if (userRow.discount_percent &&
-                (!userRow.discount_expires_at || userRow.discount_expires_at > now)) {
-                discountPercent = userRow.discount_percent || 0;
-              }
-            }
-
-            db.prepare('DETACH DATABASE bot_db').run();
-          } catch (attachError) {
-            fastify.log.warn({ err: attachError }, 'Failed to check user discount from bot database');
-          }
-        } catch (e) {
-          fastify.log.error({ err: e }, 'Error checking user discount in bot database');
-        }
-      }
+      const discountPercent = getBotUserDiscount(request.user.tgId || tgId || 0);
 
       // Применяем скидку к цене
       if (discountPercent > 0 && discountPercent <= 100) {
@@ -219,6 +182,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           planId,
           userRef,
           bonusDays,
+          idempotencyKey: clientIdempotencyKey,
         });
 
         // Создаем платеж в YooKassa
@@ -288,13 +252,14 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           throw new Error(`YooKassa payment не содержит confirmation_url. Status: ${payment.status}`);
         }
 
-        // Сохраняем yookassa_payment_id в заказ
+        // Сохраняем yookassa_payment_id и paymentUrl в заказ
         ordersRepo.setPaymentId({
           orderId,
           yookassaPaymentId: payment.id,
           amountValue: payment.amount.value,
           amountCurrency: payment.amount.currency,
         });
+        ordersRepo.setPaymentUrl(orderId, payment.confirmation.confirmation_url);
 
         const response: CreateOrderResponse = {
           orderId,

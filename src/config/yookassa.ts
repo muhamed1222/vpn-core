@@ -10,27 +10,32 @@ export const YOOKASSA_WEBHOOK_IPS = [
   '2a02:5180::/32',
 ];
 
+function ipv4ToInt(ip: string): number {
+  return ip.split('.').reduce((acc, octet) => ((acc << 8) | parseInt(octet, 10)) >>> 0, 0);
+}
+
+function isInCIDR(ip: string, cidr: string): boolean {
+  const [network, prefixStr] = cidr.split('/');
+  const prefix = parseInt(prefixStr, 10);
+  // Маска: например /27 → 0xFFFFFFE0
+  const mask = prefix === 0 ? 0 : (~(0xFFFFFFFF >>> prefix)) >>> 0;
+  return (ipv4ToInt(ip) & mask) >>> 0 === (ipv4ToInt(network) & mask) >>> 0;
+}
+
 export function isYooKassaIP(ip: string): boolean {
-  // Простая проверка для IPv4
-  for (const cidr of YOOKASSA_WEBHOOK_IPS) {
-    if (cidr.includes('/')) {
-      // CIDR проверка (упрощенная)
-      const [network, prefix] = cidr.split('/');
-      const mask = parseInt(prefix, 10);
-      if (mask === 32 && network === ip) {
-        return true;
-      }
-      // Для упрощения, проверяем только точные совпадения сетей
-      // В production лучше использовать библиотеку для CIDR
-      if (ip.startsWith(network.split('.').slice(0, Math.floor(mask / 8)).join('.'))) {
+  // Убираем IPv6-mapped IPv4 (::ffff:1.2.3.4)
+  const normalizedIp = ip.startsWith('::ffff:') ? ip.slice(7) : ip;
+
+  for (const entry of YOOKASSA_WEBHOOK_IPS) {
+    if (entry.includes('/')) {
+      if (!normalizedIp.includes(':') && isInCIDR(normalizedIp, entry)) {
         return true;
       }
     } else {
-      if (cidr === ip) {
+      if (entry === normalizedIp) {
         return true;
       }
     }
   }
   return false;
 }
-

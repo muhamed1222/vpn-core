@@ -66,6 +66,20 @@ function runMigrations(database: Database.Database): void {
     // Игнорируем ошибку, если колонка уже существует
   }
 
+  // Добавляем колонку idempotency_key, если её нет (для существующих баз)
+  try {
+    database.prepare("ALTER TABLE orders ADD COLUMN idempotency_key TEXT").run();
+  } catch (e) {
+    // Игнорируем ошибку, если колонка уже существует
+  }
+
+  // Добавляем колонку payment_url, если её нет (для существующих баз)
+  try {
+    database.prepare("ALTER TABLE orders ADD COLUMN payment_url TEXT").run();
+  } catch (e) {
+    // Игнорируем ошибку, если колонка уже существует
+  }
+
   // Создаем таблицу payment_events
   database.exec(`
     CREATE TABLE IF NOT EXISTS payment_events (
@@ -94,6 +108,7 @@ function runMigrations(database: Database.Database): void {
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
     CREATE INDEX IF NOT EXISTS idx_orders_yookassa_payment_id ON orders(yookassa_payment_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_idempotency_key ON orders(idempotency_key);
     CREATE INDEX IF NOT EXISTS idx_payment_events_yookassa_payment_id ON payment_events(yookassa_payment_id);
     CREATE INDEX IF NOT EXISTS idx_vpn_keys_user_ref ON vpn_keys(user_ref);
     CREATE INDEX IF NOT EXISTS idx_vpn_keys_active ON vpn_keys(user_ref, is_active);

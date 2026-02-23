@@ -10,6 +10,8 @@ export interface OrderRow {
   amount_currency: string | null;
   bonus_days: number;
   key: string | null;
+  idempotency_key: string | null;
+  payment_url: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +29,7 @@ export function createOrder(params: {
   planId: string;
   userRef?: string;
   bonusDays?: number;
+  idempotencyKey?: string;
 }): void {
   const db = getDatabase();
   const now = new Date().toISOString();
@@ -35,16 +38,32 @@ export function createOrder(params: {
     INSERT INTO orders (
       order_id, user_ref, plan_id, status,
       yookassa_payment_id, amount_value, amount_currency, bonus_days, key,
-      created_at, updated_at
-    ) VALUES (?, ?, ?, 'pending', NULL, NULL, NULL, ?, NULL, ?, ?)
+      idempotency_key, created_at, updated_at
+    ) VALUES (?, ?, ?, 'pending', NULL, NULL, NULL, ?, NULL, ?, ?, ?)
   `).run(
     params.orderId,
     params.userRef || '',
     params.planId,
     params.bonusDays || 0,
+    params.idempotencyKey || null,
     now,
     now
   );
+}
+
+export function getOrderByIdempotencyKey(idempotencyKey: string): OrderRow | null {
+  const db = getDatabase();
+  const row = db.prepare('SELECT * FROM orders WHERE idempotency_key = ?').get(idempotencyKey) as OrderRow | undefined;
+  return row || null;
+}
+
+export function setPaymentUrl(orderId: string, paymentUrl: string): boolean {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  const result = db.prepare(
+    'UPDATE orders SET payment_url = ?, updated_at = ? WHERE order_id = ?'
+  ).run(paymentUrl, now, orderId);
+  return result.changes > 0;
 }
 
 export function getOrder(orderId: string): OrderRow | null {

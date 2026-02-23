@@ -1,5 +1,6 @@
 import Fastify from 'fastify';
 import dotenv from 'dotenv';
+import * as Sentry from '@sentry/node';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import { registerRoutes } from './routes/index.js';
@@ -20,6 +21,19 @@ import { join } from 'path';
 // process.cwd() вернет /opt/vpn-core при запуске через systemd
 const envPath = join(process.cwd(), '.env');
 dotenv.config({ path: envPath });
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  environment: process.env.NODE_ENV || 'production',
+  tracesSampleRate: 0.1,
+});
+
+process.on('unhandledRejection', (reason) => {
+  Sentry.captureException(reason);
+});
+process.on('uncaughtException', (error) => {
+  Sentry.captureException(error);
+});
 
 const HOST = process.env.HOST || '127.0.0.1';
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -111,6 +125,9 @@ fastify.decorate('marzbanService', marzbanService);
 
 // Обработка ошибок
 fastify.setErrorHandler((error, request, reply) => {
+  if (!error.statusCode || error.statusCode >= 500) {
+    Sentry.captureException(error);
+  }
   fastify.log.error(error);
   reply.status(error.statusCode || 500).send({
     error: error.message || 'Internal Server Error',
