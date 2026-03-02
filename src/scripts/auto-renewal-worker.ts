@@ -16,7 +16,7 @@ dotenv.config({ path: envPath });
 
 import { getDatabase } from '../storage/db.js';
 import * as fs from 'fs';
-import { getBotDbPath } from '../storage/botRepo.js';
+import { getBotDbPath, updateBotAutoRenewal } from '../storage/botRepo.js';
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
@@ -93,7 +93,7 @@ export async function processAutoRenewals() {
                     description: `Автопродление подписки: Тариф ${planId}`,
                     receipt: {
                         customer: {
-                            email: sub.user.email || `${tgId}@outlivion.space`,
+                            email: sub.user.email || process.env.RECEIPT_DEFAULT_EMAIL || 'noreply@outlivion.space',
                         },
                         items: [{
                             description: `VPN подписка — тариф ${planId}`,
@@ -189,7 +189,7 @@ export async function processAutoRenewals() {
                                 description: `Автопродление подписки: Тариф ${planId}`,
                                 receipt: {
                                     customer: {
-                                        email: `${tgId}@outlivion.space`
+                                        email: process.env.RECEIPT_DEFAULT_EMAIL || 'noreply@outlivion.space'
                                     },
                                     items: [{
                                         description: `VPN подписка — тариф ${planId}`,
@@ -215,7 +215,7 @@ export async function processAutoRenewals() {
                         } catch (chargeErr: any) {
                             console.error(`[AutoRenewalWorker] [Bot] Charge failed for user ${tgId}:`, chargeErr.message);
 
-                            db.prepare('UPDATE bot_db.auto_renewals SET enabled = 0 WHERE user_id = ?').run(tgId);
+                            updateBotAutoRenewal(tgId, false);
 
                             await notifyUser(
                                 tgId,

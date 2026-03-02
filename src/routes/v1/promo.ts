@@ -31,7 +31,7 @@ export async function promoRoutes(fastify: FastifyInstance) {
             return reply.status(400).send({ ok: false, message: 'Срок действия промокода истек' });
         }
 
-        if (promo.usage_limit && promo.usage_count >= promo.usage_limit) {
+        if (!request.user.isAdmin && promo.usage_limit && promo.usage_count >= promo.usage_limit) {
             return reply.status(400).send({ ok: false, message: 'Промокод больше не действителен' });
         }
 
@@ -67,8 +67,10 @@ export async function promoRoutes(fastify: FastifyInstance) {
         if (!promo) return reply.status(404).send({ ok: false, message: 'Промокод не найден' });
 
         const now = Date.now();
-        if ((promo.expires_at && promo.expires_at < now) ||
-            (promo.usage_limit && promo.usage_count >= promo.usage_limit)) {
+        if (promo.expires_at && promo.expires_at < now) {
+            return reply.status(400).send({ ok: false, message: 'Промокод недействителен' });
+        }
+        if (!request.user.isAdmin && promo.usage_limit && promo.usage_count >= promo.usage_limit) {
             return reply.status(400).send({ ok: false, message: 'Промокод недействителен' });
         }
 
@@ -83,8 +85,10 @@ export async function promoRoutes(fastify: FastifyInstance) {
                 const success = await fastify.marzbanService.renewUser(userId, promo.value);
                 if (!success) throw new Error('Marzban renewal failed');
 
-                // Помечаем как использованный
-                repo.usePromocode(userId, promo.code, botDbPath);
+                // Помечаем как использованный (для админов не пишем в used_promocodes)
+                if (!request.user.isAdmin) {
+                    repo.usePromocode(userId, promo.code, botDbPath);
+                }
 
                 return reply.send({ ok: true, message: `Подписка продлена на ${promo.value} дней` });
             } else if (promo.type === 'DISCOUNT') {
@@ -92,8 +96,10 @@ export async function promoRoutes(fastify: FastifyInstance) {
                 const expiresAt = Date.now() + 24 * 60 * 60 * 1000;
                 repo.setUserDiscount(userId, promo.value, expiresAt, botDbPath);
 
-                // Помечаем как использованный
-                repo.usePromocode(userId, promo.code, botDbPath);
+                // Помечаем как использованный (для админов не пишем в used_promocodes)
+                if (!request.user.isAdmin) {
+                    repo.usePromocode(userId, promo.code, botDbPath);
+                }
 
                 return reply.send({ ok: true, message: `Скидка ${promo.value}% применена на 24 часа` });
             }

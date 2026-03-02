@@ -11,6 +11,7 @@ import { initDatabase, closeDatabase } from './storage/db.js';
 import { initDevicesTable } from './storage/devicesRepo.js';
 import { YooKassaClient } from './integrations/yookassa/client.js';
 import { MarzbanService } from './integrations/marzban/service.js';
+import { HeleketClient } from './integrations/heleket/client.js';
 import { initWorker } from './scripts/auto-renewal-worker.js';
 
 // Загружаем переменные окружения
@@ -62,6 +63,11 @@ const MARZBAN_ADMIN_PASSWORD = process.env.MARZBAN_ADMIN_PASSWORD || '';
 const MARZBAN_PUBLIC_URL = process.env.MARZBAN_PUBLIC_URL || 'https://vpn.outlivion.space';
 const SUBSCRIPTION_PROXY_PATH = process.env.SUBSCRIPTION_PROXY_PATH || '';
 
+// Heleket crypto payment
+const HELEKET_MERCHANT_ID = process.env.HELEKET_MERCHANT_ID || '';
+const HELEKET_API_KEY = process.env.HELEKET_API_KEY || '';
+const HELEKET_WEBHOOK_URL = process.env.HELEKET_WEBHOOK_URL || `${PUBLIC_BASE_URL}/v1/payments/webhook/heleket`;
+
 const fastify = Fastify({
   logger: true,
   trustProxy: true,
@@ -72,6 +78,7 @@ declare module 'fastify' {
   interface FastifyInstance {
     orderStore: OrderStore;
     yookassaClient: YooKassaClient;
+    heleketClient: HeleketClient;
     marzbanService: MarzbanService;
     yookassaReturnUrl: string;
     yookassaWebhookIPCheck: boolean;
@@ -112,6 +119,10 @@ fastify.decorate('authJwtSecret', AUTH_JWT_SECRET);
 fastify.decorate('authCookieName', AUTH_COOKIE_NAME);
 fastify.decorate('authCookieDomain', AUTH_COOKIE_DOMAIN);
 fastify.decorate('adminApiKey', process.env.ADMIN_API_KEY || '');
+
+// Инициализируем Heleket клиент (криптоплатежи)
+const heleketClient = new HeleketClient(HELEKET_MERCHANT_ID, HELEKET_API_KEY, HELEKET_WEBHOOK_URL);
+fastify.decorate('heleketClient', heleketClient);
 
 // Инициализируем Marzban сервис
 const marzbanService = new MarzbanService(

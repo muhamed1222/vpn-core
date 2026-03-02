@@ -130,6 +130,7 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
                   status: 'ACTIVE',
                   currentPeriodStart: sub.currentPeriodEnd,
                   currentPeriodEnd: newPeriodEnd,
+                  lastRenewalError: null,
                 }
               });
 
@@ -458,6 +459,102 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
               }).catch(() => { });
             }
           }
+        }
+      }
+
+      return reply.status(200).send({ ok: true });
+    }
+  );
+
+  /**
+   * POST /v1/payments/webhook/heleket
+   * Heleket crypto payment webhook
+   */
+  fastify.post<{ Body: unknown }>(
+    '/webhook/heleket',
+    async (request, reply) => {
+      const heleketClient = fastify.heleketClient;
+
+      // Verify signature if configured
+      const receivedSign = request.headers['sign'] as string | undefined;
+      if (receivedSign && heleketClient.isConfigured()) {
+        const rawBody = (request as any).rawBody || JSON.stringify(request.body);
+        const valid = heleketClient.verifySignature(rawBody, receivedSign);
+        if (!valid) {
+          fastify.log.warn('[Heleket Webhook] Invalid signature');
+          return reply.status(403).send({ error: 'Invalid signature' });
+        }
+      }
+
+      const body = request.body as any;
+      fastify.log.info({ body }, '[Heleket Webhook] Received');
+
+      // Heleket sends status=paid (or similar) with order_id
+      const orderId = body?.order_id || body?.orderId;
+      const status = (body?.status || '').toLowerCase();
+
+      if (!orderId) {
+        return reply.status(200).send({ ok: true });
+      }
+
+      // Only process completed/paid notifications
+      const isPaid = status === 'paid' || status === 'success' || status === 'confirmed' || status === 'completed';
+      if (!isPaid) {
+        fastify.log.info({ orderId, status }, '[Heleket Webhook] Non-paid status, ignoring');
+        return reply.status(200).send({ ok: true });
+      }
+
+      const orderRow = ordersRepo.getOrder(orderId);
+      if (!orderRow) {
+        fastify.log.warn({ orderId }, '[Heleket Webhook] Order not found');
+        return reply.status(200).send({ ok: true });
+      }
+
+      const hasValidKey = orderRow.key && typeof orderRow.key === 'string' && orderRow.key.trim() !== '';
+      if (orderRow.status === 'paid' && hasValidKey) {
+        fastify.log.info({ orderId }, '[Heleket Webhook] Already processed');
+        return reply.status(200).send({ ok: true });
+      }
+
+      const tgIdStr = orderRow.user_ref?.replace('tg_', '');
+      const tgId = tgIdStr ? parseInt(tgIdStr, 10) : null;
+
+      if (tgId && !isNaN(tgId)) {
+        try {
+          const planId = orderRow.plan_id;
+          let days = 30;
+          if (planId === 'plan_7') days = 7;
+          else if (planId === 'plan_30') days = 30;
+          else if (planId === 'plan_90') days = 90;
+          else if (planId === 'plan_180') days = 180;
+          else if (planId === 'plan_365') days = 365;
+
+          const totalDays = days + (orderRow.bonus_days || 0);
+          const vlessKey = await marzbanService.activateUser(tgId, totalDays);
+
+          if (!vlessKey) {
+            throw new Error('activateUser returned empty key');
+          }
+
+          ordersRepo.markPaidWithKey({ orderId, key: vlessKey });
+
+          // Notify user via Telegram
+          if (botToken) {
+            const expireDate = new Date(Date.now() + totalDays * 86400 * 1000).toLocaleDateString('ru-RU');
+            await axios.post(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              chat_id: tgId,
+              text: `✅ <b>Оплата криптовалютой получена! Ваша подписка активирована.</b>\n\n` +
+                `🟢 Статус: <b>Активна</b>\n` +
+                `🕓 Действует до: <b>${expireDate}</b>\n\n` +
+                `🔗 <b>Ваш ключ:</b>\n<code>${vlessKey}</code>\n\n` +
+                `Используйте кнопки в боте для управления подключением.`,
+              parse_mode: 'HTML'
+            }).catch(() => { });
+          }
+
+          fastify.log.info({ orderId, tgId }, '[Heleket Webhook] User activated successfully');
+        } catch (e: any) {
+          fastify.log.error({ err: e.message, tgId, orderId }, '[Heleket Webhook] CRITICAL ACTIVATION ERROR');
         }
       }
 

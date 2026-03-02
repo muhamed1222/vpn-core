@@ -2,22 +2,25 @@ import { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { CreateOrderRequest, CreateOrderResponse, GetOrderResponse } from '../../types/order.js';
 import { YooKassaClient } from '../../integrations/yookassa/client.js';
+import { HeleketClient } from '../../integrations/heleket/client.js';
 import { v4 as uuidv4 } from 'uuid';
 import { getPlanPrice } from '../../config/plans.js';
 import * as ordersRepo from '../../storage/ordersRepo.js';
 import { createVerifyAuth } from '../../auth/verifyAuth.js';
-import { botHasPaidOrder, getBotUserDiscount } from '../../storage/botRepo.js';
+import { botHasPaidOrder, getBotUserDiscount, getBotAutoRenewal } from '../../storage/botRepo.js';
 
 const createOrderSchema = z.object({
   planId: z.string().min(1),
   returnUrlBase: z.string().url().optional(),
   bonusDays: z.number().int().min(0).optional(),
   autoRenew: z.boolean().optional(),
+  paymentMethod: z.string().optional(),
   // userRef больше не принимаем из body, берем из request.user
 });
 
 export async function ordersRoutes(fastify: FastifyInstance) {
   const yookassaClient: YooKassaClient = fastify.yookassaClient;
+  const heleketClient: HeleketClient = fastify.heleketClient;
   const yookassaReturnUrl: string = fastify.yookassaReturnUrl;
   const jwtSecret: string = fastify.authJwtSecret;
   const cookieName: string = fastify.authCookieName;
@@ -68,7 +71,7 @@ export async function ordersRoutes(fastify: FastifyInstance) {
         });
       }
 
-      const { planId, tgId, returnUrlBase, bonusDays, autoRenew } = request.body as any;
+      const { planId, tgId, returnUrlBase, bonusDays, autoRenew, paymentMethod } = request.body as any;
 
       // Проверка: если пользователь пытается купить plan_7, но у него уже есть оплаченные ордера - отклоняем
       if (planId === 'plan_7') {
@@ -185,6 +188,96 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           idempotencyKey: clientIdempotencyKey,
         });
 
+        // --- Сохранённая карта ---
+        if (paymentMethod === 'saved_card') {
+          const tgIdForCard = request.user.tgId || tgId || 0;
+          const autoRenewal = getBotAutoRenewal(tgIdForCard);
+          const savedPaymentMethodId = autoRenewal?.paymentMethodId;
+
+          if (!savedPaymentMethodId) {
+            return reply.status(400).send({
+              error: 'No saved payment method',
+              message: 'Сохранённая карта не найдена. Выберите другой способ оплаты.',
+            });
+          }
+
+          const paymentParams: any = {
+            amount: { value: amount.value, currency: amount.currency },
+            capture: true,
+            payment_method_id: savedPaymentMethodId,
+            description: `Outlivion plan ${planId}, order ${orderId}`,
+            metadata: { orderId, ...(userRef ? { userRef } : {}), planId },
+            receipt: {
+              customer: { email: 'noreply@outlivion.space' },
+              items: [{
+                description: `Outlivion VPN plan: ${planId}`,
+                quantity: '1.00',
+                amount: { value: amount.value, currency: amount.currency },
+                vat_code: 1,
+                payment_subject: 'service',
+                payment_mode: 'full_prepayment',
+              }],
+            },
+          };
+
+          const payment = await yookassaClient.createPayment(paymentParams, idempotenceKey);
+
+          if (!payment || !payment.id) {
+            throw new Error('YooKassa вернул неполный ответ при оплате сохранённой картой');
+          }
+
+          ordersRepo.setPaymentId({
+            orderId,
+            yookassaPaymentId: payment.id,
+            amountValue: payment.amount?.value || amount.value,
+            amountCurrency: payment.amount?.currency || amount.currency,
+          });
+
+          const confirmationUrl = payment.confirmation?.confirmation_url;
+          if (confirmationUrl) {
+            ordersRepo.setPaymentUrl(orderId, confirmationUrl);
+          }
+
+          fastify.log.info({ orderId, paymentId: payment.id, status: payment.status }, 'Saved card payment created');
+
+          return reply.status(201).send({
+            orderId,
+            status: 'pending',
+            ...(confirmationUrl ? { paymentUrl: confirmationUrl } : {}),
+          });
+        }
+
+        // --- Heleket (крипто) ---
+        if (paymentMethod === 'heleket') {
+          if (!heleketClient.isConfigured()) {
+            return reply.status(503).send({
+              error: 'Crypto payments unavailable',
+              message: 'Crypto payment provider is not configured.',
+            });
+          }
+
+          const amountNum = parseFloat(amount.value);
+          const heleket = await heleketClient.createInvoice(orderId, amountNum, resolvedReturnUrl, amount.currency);
+
+          ordersRepo.setPaymentId({
+            orderId,
+            yookassaPaymentId: heleket.paymentId || `heleket_${orderId}`,
+            amountValue: amount.value,
+            amountCurrency: amount.currency,
+          });
+          ordersRepo.setPaymentUrl(orderId, heleket.paymentUrl);
+
+          fastify.log.info({ orderId, paymentUrl: heleket.paymentUrl }, 'Heleket order created');
+
+          const response: CreateOrderResponse = {
+            orderId,
+            status: 'pending',
+            paymentUrl: heleket.paymentUrl,
+          };
+          return reply.status(201).send(response);
+        }
+
+        // --- YooKassa ---
         // Создаем платеж в YooKassa
         // Для РФ требуется receipt (чек) - добавляем receipt с валидным форматом
         const paymentParams: any = {
@@ -224,7 +317,18 @@ export async function ordersRoutes(fastify: FastifyInstance) {
           },
         };
 
-        if (autoRenew) {
+        // SberPay не поддерживает сохранение метода; карта и СБП — поддерживают
+        const supportsAutoRenew = !paymentMethod || paymentMethod === 'card' || paymentMethod === 'sbp' || paymentMethod === 'tpay';
+
+        if (paymentMethod === 'sbp') {
+          paymentParams.payment_method_data = { type: 'sbp' };
+        } else if (paymentMethod === 'sberpay') {
+          paymentParams.payment_method_data = { type: 'sber_pay', flow: 'redirect' };
+        } else if (paymentMethod === 'tpay') {
+          paymentParams.payment_method_data = { type: 't_bank' };
+        }
+
+        if (autoRenew && supportsAutoRenew) {
           paymentParams.save_payment_method = true;
           paymentParams.metadata.autoRenew = 'true';
         }
@@ -278,10 +382,9 @@ export async function ordersRoutes(fastify: FastifyInstance) {
 
         return reply.status(201).send(response);
       } catch (error) {
-        // Если YooKassa createPayment упал, заказ остается pending
+        // Если createPayment упал, заказ остается pending
         const errorMessage = error instanceof Error ? error.message : String(error);
 
-        // Детальное логирование ошибки для диагностики
         fastify.log.error(
           {
             err: error,
@@ -289,17 +392,15 @@ export async function ordersRoutes(fastify: FastifyInstance) {
             orderId,
             planId,
             userRef,
+            paymentMethod: paymentMethod || 'yookassa',
             amount: amount.value,
             currency: amount.currency,
           },
-          'Failed to create YooKassa payment'
+          'Failed to create payment'
         );
 
-        // Логируем полную ошибку в консоль для отладки (без секретов)
         const sanitizedError = errorMessage.replace(/SHOP_ID|SECRET_KEY|Authorization|Basic [A-Za-z0-9+/=]+/g, '[REDACTED]');
-        fastify.log.error({ fullError: sanitizedError }, 'YooKassa payment error details');
 
-        // Возвращаем более информативную ошибку
         return reply.status(500).send({
           error: 'Failed to create payment',
           message: 'Payment service temporarily unavailable. Order created but payment link could not be generated.',
