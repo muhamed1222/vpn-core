@@ -57,7 +57,7 @@ const AUTH_COOKIE_NAME = process.env.AUTH_COOKIE_NAME || 'outlivion_session';
 const AUTH_COOKIE_DOMAIN = process.env.AUTH_COOKIE_DOMAIN || '.outlivion.space';
 
 // Marzban settings
-const MARZBAN_API_URL = process.env.MARZBAN_API_URL || 'http://127.0.0.1:8000';
+const MARZBAN_API_URL = process.env.MARZBAN_API_URL || 'https://vpn.outlivion.space';
 const MARZBAN_ADMIN_USERNAME = process.env.MARZBAN_ADMIN_USERNAME || '';
 const MARZBAN_ADMIN_PASSWORD = process.env.MARZBAN_ADMIN_PASSWORD || '';
 const MARZBAN_PUBLIC_URL = process.env.MARZBAN_PUBLIC_URL || 'https://vpn.outlivion.space';

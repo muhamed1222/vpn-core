@@ -31,6 +31,14 @@ export interface VerifyAuthOptions {
  */
 export function createVerifyAuth(options: VerifyAuthOptions) {
   const { jwtSecret, cookieName, botToken, adminApiKey } = options;
+  const adminIds = new Set(
+    (process.env.ADMIN_ID || '')
+      .split(',')
+      .map((id) => parseInt(id.trim(), 10))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  );
+
+  const isAdminUser = (tgId?: number): boolean => !!tgId && adminIds.has(tgId);
 
   return async function verifyAuth(
     request: FastifyRequest,
@@ -52,7 +60,7 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
           tgId: payload.tgId,
           username: payload.username,
           firstName: payload.firstName,
-          isAdmin: false
+          isAdmin: isAdminUser(payload.tgId)
         };
         return;
       }
@@ -73,7 +81,7 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
             tgId: verifyResult.user.id,
             username: verifyResult.user.username,
             firstName: verifyResult.user.first_name,
-            isAdmin: false
+            isAdmin: isAdminUser(verifyResult.user.id)
           };
           return;
         }
@@ -89,4 +97,3 @@ export function createVerifyAuth(options: VerifyAuthOptions) {
     });
   };
 }
-

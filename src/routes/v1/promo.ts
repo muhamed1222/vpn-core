@@ -38,7 +38,7 @@ export async function promoRoutes(fastify: FastifyInstance) {
         // Проверяем, не использовал ли уже этот пользователь
         const effectiveTgId = (request.user.isAdmin && tgId) ? tgId : request.user.tgId;
 
-        if (effectiveTgId) {
+        if (!request.user.isAdmin && effectiveTgId) {
             const alreadyUsed = repo.hasUserUsedPromocode(effectiveTgId, promo.code, botDbPath);
             if (alreadyUsed) {
                 return reply.status(400).send({ ok: false, message: 'Вы уже использовали этот промокод' });

@@ -506,7 +506,17 @@ export async function paymentsRoutes(fastify: FastifyInstance) {
 
       const orderRow = ordersRepo.getOrder(orderId);
       if (!orderRow) {
-        fastify.log.warn({ orderId }, '[Heleket Webhook] Order not found');
+        fastify.log.warn({ orderId }, '[Heleket Webhook] Order not found in Core DB. Forwarding to Bot...');
+        try {
+          // Пытаемся переслать вебхук в бота (предполагаем порт 3000)
+          // Бот обрабатывает вебхук по пути /webhook/payment/heleket
+          await axios.post('http://127.0.0.1:3000/webhook/payment/heleket', request.body, {
+            headers: request.headers as any
+          });
+          fastify.log.info({ orderId }, '[Heleket Webhook] Forwarded to Bot successfully');
+        } catch (forwardErr: any) {
+          fastify.log.error({ orderId, err: forwardErr.message }, '[Heleket Webhook] Failed to forward to Bot');
+        }
         return reply.status(200).send({ ok: true });
       }
 

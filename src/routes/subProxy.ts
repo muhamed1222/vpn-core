@@ -83,8 +83,9 @@ function transformContent(content: string): string {
             }
 
             const finalRemark = `${flag} ${remark}`.trim();
+            const encodedRemark = encodeURIComponent(finalRemark);
 
-            return `${url}#${finalRemark}`;
+            return `${url}#${encodedRemark}`;
         });
 
         const transformed = transformedLines.join('\n');
@@ -174,9 +175,12 @@ export async function subscriptionProxyRoutes(fastify: FastifyInstance) {
 
             // Forward headers
             for (const [key, value] of Object.entries(response.headers)) {
-                if (['content-length', 'transfer-encoding', 'content-encoding', 'connection'].includes(key.toLowerCase())) continue;
+                if (['content-length', 'transfer-encoding', 'content-encoding', 'connection', 'content-disposition'].includes(key.toLowerCase())) continue;
                 reply.header(key, value);
             }
+
+            // Force inline rendering for QR-scanned links in browsers/scanners.
+            reply.header('Content-Disposition', 'inline');
 
             // Fallback Branding
             if (!response.headers['profile-title']) reply.header('Profile-Title', 'Outlivian VPN');
