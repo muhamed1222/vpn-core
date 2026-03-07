@@ -15,13 +15,7 @@ import { HeleketClient } from './integrations/heleket/client.js';
 import { initWorker } from './scripts/auto-renewal-worker.js';
 
 // Загружаем переменные окружения
-// Указываем явный путь к .env файлу для надежности
-// При запуске из dist/server.js путь должен быть относительно корня проекта
-import { join } from 'path';
-// Путь к .env: из dist/server.js -> на уровень выше -> .env
-// process.cwd() вернет /opt/vpn-core при запуске через systemd
-const envPath = join(process.cwd(), '.env');
-dotenv.config({ path: envPath });
+dotenv.config(); // По умолчанию ищет .env в process.cwd()
 
 Sentry.init({
   dsn: process.env.SENTRY_DSN,
@@ -44,6 +38,7 @@ const YOOKASSA_SECRET_KEY = process.env.YOOKASSA_SECRET_KEY || '';
 const YOOKASSA_RETURN_URL = process.env.YOOKASSA_RETURN_URL || 'https://my.outlivion.space/pay/return';
 const YOOKASSA_WEBHOOK_IP_CHECK = process.env.YOOKASSA_WEBHOOK_IP_CHECK === 'true';
 const PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL || 'https://api.outlivion.space';
+const WEB_APP_BASE_URL = process.env.WEB_APP_BASE_URL || 'https://my.outlivion.space';
 
 // Разрешенные origin для CORS
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
@@ -88,6 +83,7 @@ declare module 'fastify' {
     authCookieName: string;
     authCookieDomain: string;
     adminApiKey: string;
+    webAppBaseUrl: string;
   }
 }
 
@@ -119,6 +115,7 @@ fastify.decorate('authJwtSecret', AUTH_JWT_SECRET);
 fastify.decorate('authCookieName', AUTH_COOKIE_NAME);
 fastify.decorate('authCookieDomain', AUTH_COOKIE_DOMAIN);
 fastify.decorate('adminApiKey', process.env.ADMIN_API_KEY || '');
+fastify.decorate('webAppBaseUrl', WEB_APP_BASE_URL);
 
 // Инициализируем Heleket клиент (криптоплатежи)
 const heleketClient = new HeleketClient(HELEKET_MERCHANT_ID, HELEKET_API_KEY, HELEKET_WEBHOOK_URL);

@@ -23,77 +23,123 @@ export interface VerifyAuthOptions {
 }
 
 /**
- * Middleware для проверки авторизации
- * Поддерживает три способа:
- * 1. Admin API Key (x-admin-api-key) - для сервисов (VPN Bot)
- * 2. Cookie-based auth (JWT в cookie) - для браузера
- * 3. initData в Authorization header - для Mini App
+ * Внутренняя попытка аутентификации.
+ * Возвращает AuthenticationResult или null (если нет данных).
+ * Бросает ошибку с prefix INVALID: если данные переданы, но невалидны.
  */
-export function createVerifyAuth(options: VerifyAuthOptions) {
+async function tryAuthenticate(
+  request: FastifyRequest,
+  options: VerifyAuthOptions,
+  adminIds: Set<number>
+): Promise<AuthenticationResult | null> {
   const { jwtSecret, cookieName, botToken, adminApiKey } = options;
-  const adminIds = new Set(
+  const isAdminUser = (tgId?: number): boolean => !!tgId && adminIds.has(tgId);
+
+  // Вариант 1: Admin API Key (для VPN Bot)
+  const apiKey = request.headers['x-admin-api-key'];
+  if (adminApiKey && apiKey === adminApiKey) {
+    return { isAdmin: true, tgId: 0 };
+  }
+
+  // Вариант 2: Cookie-based auth (JWT в cookie)
+  const token = request.cookies[cookieName];
+  if (token) {
+    const payload = verifyToken({ token, secret: jwtSecret });
+    if (payload) {
+      return {
+        tgId: payload.tgId,
+        username: payload.username,
+        firstName: payload.firstName,
+        isAdmin: isAdminUser(payload.tgId),
+      };
+    }
+  }
+
+  // Вариант 3: initData в Authorization header (для Mini App / Website)
+  const authHeader = request.headers.authorization;
+  if (authHeader && botToken) {
+    const { verifyTelegramInitData } = await import('./telegram.js');
+    const verifyResult = verifyTelegramInitData({ initData: authHeader, botToken });
+
+    if (verifyResult.valid && verifyResult.user) {
+      return {
+        tgId: verifyResult.user.id,
+        username: verifyResult.user.username,
+        firstName: verifyResult.user.first_name,
+        isAdmin: isAdminUser(verifyResult.user.id),
+      };
+    }
+
+    // initData передана, но не прошла проверку — это явная ошибка
+    throw new Error(`INVALID:${verifyResult.error || 'Invalid Telegram data'}`);
+  }
+
+  // Нет ни одного способа авторизации
+  return null;
+}
+
+function buildAdminIds(): Set<number> {
+  return new Set(
     (process.env.ADMIN_ID || '')
       .split(',')
       .map((id) => parseInt(id.trim(), 10))
       .filter((id) => Number.isFinite(id) && id > 0)
   );
+}
 
-  const isAdminUser = (tgId?: number): boolean => !!tgId && adminIds.has(tgId);
+/**
+ * Middleware для ОБЯЗАТЕЛЬНОЙ проверки авторизации.
+ * Если авторизация не прошла — отправляет 401.
+ */
+export function createVerifyAuth(options: VerifyAuthOptions) {
+  const adminIds = buildAdminIds();
 
   return async function verifyAuth(
     request: FastifyRequest,
     reply: FastifyReply
   ): Promise<void> {
-    // Вариант 1: Admin API Key (для VPN Bot)
-    const apiKey = request.headers['x-admin-api-key'];
-    if (adminApiKey && apiKey === adminApiKey) {
-      request.user = { isAdmin: true, tgId: 0 }; // tgId 0 для админа (заглушка)
-      return;
-    }
-
-    // Вариант 2: Cookie-based auth (JWT в cookie)
-    const token = request.cookies[cookieName];
-    if (token) {
-      const payload = verifyToken({ token, secret: jwtSecret });
-      if (payload) {
-        request.user = {
-          tgId: payload.tgId,
-          username: payload.username,
-          firstName: payload.firstName,
-          isAdmin: isAdminUser(payload.tgId)
-        };
+    try {
+      const authResult = await tryAuthenticate(request, options, adminIds);
+      if (authResult) {
+        request.user = authResult;
         return;
       }
+      // Нет данных авторизации
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required',
+      });
+    } catch (error: any) {
+      const msg = error?.message?.startsWith('INVALID:')
+        ? error.message.replace('INVALID:', '')
+        : 'Authentication required';
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: msg,
+      });
     }
+  };
+}
 
-    // Вариант 3: initData в Authorization header (для VPN Website)
-    const initData = request.headers.authorization;
-    if (initData && botToken) {
-      try {
-        const { verifyTelegramInitData } = await import('./telegram.js');
-        const verifyResult = verifyTelegramInitData({
-          initData,
-          botToken,
-        });
+/**
+ * Middleware для ОПЦИОНАЛЬНОЙ проверки авторизации.
+ * Если авторизация не прошла — пропускает запрос (request.user = undefined).
+ * Ошибки игнорируются.
+ */
+export function createVerifyAuthOptional(options: VerifyAuthOptions) {
+  const adminIds = buildAdminIds();
 
-        if (verifyResult.valid && verifyResult.user) {
-          request.user = {
-            tgId: verifyResult.user.id,
-            username: verifyResult.user.username,
-            firstName: verifyResult.user.first_name,
-            isAdmin: isAdminUser(verifyResult.user.id)
-          };
-          return;
-        }
-      } catch (error) {
-        console.error('[verifyAuth] Error verifying initData:', error);
+  return async function verifyAuthOptional(
+    request: FastifyRequest,
+    _reply: FastifyReply
+  ): Promise<void> {
+    try {
+      const authResult = await tryAuthenticate(request, options, adminIds);
+      if (authResult) {
+        request.user = authResult;
       }
+    } catch {
+      // Опциональная авторизация — игнорируем все ошибки
     }
-
-    // Если ни один способ не сработал
-    return reply.status(401).send({
-      error: 'Unauthorized',
-      message: 'Authentication required',
-    });
   };
 }

@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { PLAN_PRICES } from '../../config/plans.js';
-import { createVerifyAuth } from '../../auth/verifyAuth.js';
+import { createVerifyAuthOptional } from '../../auth/verifyAuth.js';
 import { getOrdersByUser } from '../../storage/ordersRepo.js';
 import fs from 'fs';
 
@@ -14,7 +14,7 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
   const adminApiKey = fastify.adminApiKey;
 
   // Опциональная авторизация для проверки доступности пробного периода
-  const verifyAuthOptional = createVerifyAuth({
+  const verifyAuthOptional = createVerifyAuthOptional({
     jwtSecret,
     cookieName,
     botToken,
@@ -28,13 +28,7 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
   fastify.get('/', {
     // Делаем авторизацию опциональной - если пользователь не авторизован,
     // он просто увидит все тарифы, включая пробный.
-    preHandler: async (request, reply) => {
-      try {
-        await verifyAuthOptional(request, reply);
-      } catch (e) {
-        // Игнорируем ошибку авторизации - request.user останется undefined
-      }
-    }
+    preHandler: verifyAuthOptional
   }, async (request, reply) => {
     let trialAvailable = true;
 
@@ -42,10 +36,10 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
     if (request.user && request.user.tgId) {
       const userRef = `tg_${request.user.tgId}`;
       const orders = getOrdersByUser(userRef);
-      
+
       // Проверяем, были ли успешные оплаты (статус 'paid')
       const hasPaidOrders = orders.some(o => o.status === 'paid');
-      
+
       if (hasPaidOrders) {
         trialAvailable = false;
         fastify.log.info({ tgId: request.user.tgId, hasPaidOrders }, '[Tariffs] User has paid orders, hiding plan_7');
@@ -58,24 +52,24 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
         try {
           const { getDatabase } = await import('../../storage/db.js');
           const db = getDatabase();
-          
+
           // Прикрепляем базу бота (ATTACH)
           // Примечание: ATTACH работает в рамках текущего соединения
           // Мы используем try/catch на случай проблем с правами доступа
           try {
             db.prepare('ATTACH DATABASE ? AS bot_db').run(botDbPath);
-            
+
             const botPaidOrder = db.prepare(`
               SELECT 1 FROM bot_db.orders 
               WHERE user_id = ? AND status IN ('PAID', 'COMPLETED') 
               LIMIT 1
             `).get(request.user.tgId);
-            
+
             if (botPaidOrder) {
               trialAvailable = false;
               fastify.log.info({ tgId: request.user.tgId }, '[Tariffs] User has paid orders in bot DB, hiding plan_7');
             }
-            
+
             db.prepare('DETACH DATABASE bot_db').run();
           } catch (attachError) {
             // Если база уже прикреплена или другая ошибка
@@ -103,7 +97,7 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
       .map(([id, price]) => {
         // Извлекаем дни из planId
         const days = parseInt(id.replace('plan_', ''), 10);
-        
+
         // Формируем название тарифа
         let name = '';
         if (days === 7) name = '7 дней';
@@ -112,7 +106,7 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
         else if (days === 180) name = '6 месяцев';
         else if (days === 365) name = '1 год';
         else name = `${days} ${days === 1 ? 'день' : days < 5 ? 'дня' : 'дней'}`;
-        
+
         return {
           id,
           name,
@@ -121,7 +115,7 @@ export async function tariffsRoutes(fastify: FastifyInstance) {
           price_stars: price.stars,
         };
       });
-    
+
     return reply.send(tariffs);
   });
 }

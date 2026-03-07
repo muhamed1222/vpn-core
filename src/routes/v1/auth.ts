@@ -1,13 +1,34 @@
-import { FastifyInstance } from 'fastify';
+import { FastifyInstance, FastifyReply } from 'fastify';
 import { verifyTelegramInitData } from '../../auth/telegram.js';
-import { createToken } from '../../auth/jwt.js';
+import { createToken, verifyToken } from '../../auth/jwt.js';
 import { getUserPhotoUrl } from '../../auth/telegramPhoto.js';
+import {
+  consumeBrowserAccessLink,
+  consumeIosHandoffToken,
+  createIosHandoffToken,
+  getOrCreateBrowserAccessLink,
+  revokeActiveBrowserAccessLinks,
+  rotateBrowserAccessLink,
+} from '../../storage/browserAuthRepo.js';
 
 export async function authRoutes(fastify: FastifyInstance) {
   const botToken: string = fastify.telegramBotToken;
   const jwtSecret: string = fastify.authJwtSecret;
   const cookieName: string = fastify.authCookieName;
   const cookieDomain: string = fastify.authCookieDomain || '.outlivion.space';
+  const adminApiKey: string = fastify.adminApiKey;
+  const webAppBaseUrl: string = fastify.webAppBaseUrl || 'https://my.outlivion.space';
+
+  const setSessionCookie = (reply: FastifyReply, token: string, maxAgeDays: number) => {
+    reply.setCookie(cookieName, token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'lax',
+      path: '/',
+      domain: cookieDomain,
+      maxAge: 60 * 60 * 24 * maxAgeDays,
+    });
+  };
 
   // POST /v1/auth/telegram
   fastify.post<{ Body: { initData: string } }>(
@@ -69,14 +90,7 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
 
       // Устанавливаем cookie
-      reply.setCookie(cookieName, token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        domain: cookieDomain,
-        maxAge: 60 * 60 * 24 * 7, // 7 дней
-      });
+      setSessionCookie(reply, token, 7);
 
       return reply.send({
         ok: true,
@@ -106,10 +120,14 @@ export async function authRoutes(fastify: FastifyInstance) {
     },
     async (request, reply) => {
       const { token } = request.body;
-      const { verifyToken } = await import('../../auth/jwt.js');
-
-      // Проверяем токен
-      const payload = verifyToken({ token, secret: jwtSecret });
+      const handoff = consumeIosHandoffToken(token);
+      const payload = handoff.status === 'active'
+        ? {
+            tgId: handoff.tgId!,
+            username: handoff.username,
+            firstName: handoff.firstName,
+          }
+        : verifyToken({ token, secret: jwtSecret });
 
       if (!payload || !payload.tgId) {
         return reply.status(401).send({
@@ -130,14 +148,14 @@ export async function authRoutes(fastify: FastifyInstance) {
       }
 
       // Устанавливаем сессионную cookie (точно так же, как в /telegram)
-      reply.setCookie(cookieName, token, {
-        httpOnly: true,
-        secure: true,
-        sameSite: 'lax',
-        path: '/',
-        domain: cookieDomain,
-        maxAge: 60 * 60 * 24 * 7,
+      const sessionToken = createToken({
+        tgId: payload.tgId,
+        username: payload.username,
+        firstName: payload.firstName,
+        secret: jwtSecret,
+        expiresInDays: handoff.status === 'active' ? 30 : 7,
       });
+      setSessionCookie(reply, sessionToken, handoff.status === 'active' ? 30 : 7);
 
       return reply.send({
         ok: true,
@@ -150,6 +168,195 @@ export async function authRoutes(fastify: FastifyInstance) {
       });
     }
   );
+
+  fastify.get('/browser-access/link', {
+    preHandler: async (request, reply) => {
+      const { createVerifyAuth } = await import('../../auth/verifyAuth.js');
+      const verifyAuth = createVerifyAuth({ jwtSecret, cookieName, botToken });
+      return verifyAuth(request, reply);
+    },
+  }, async (request, reply) => {
+    if (!request.user) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const userRef = `tg_${request.user.tgId}`;
+    const link = getOrCreateBrowserAccessLink(userRef);
+
+    return reply.send({
+      ok: true,
+      url: `${webAppBaseUrl.replace(/\/$/, '')}/access/${encodeURIComponent(link.token)}`,
+      expiresAt: link.record.expires_at,
+      status: 'active',
+    });
+  });
+
+  fastify.post('/browser-access/link/rotate', {
+    preHandler: async (request, reply) => {
+      const { createVerifyAuth } = await import('../../auth/verifyAuth.js');
+      const verifyAuth = createVerifyAuth({ jwtSecret, cookieName, botToken });
+      return verifyAuth(request, reply);
+    },
+  }, async (request, reply) => {
+    if (!request.user) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const userRef = `tg_${request.user.tgId}`;
+    const link = rotateBrowserAccessLink(userRef);
+
+    return reply.send({
+      ok: true,
+      url: `${webAppBaseUrl.replace(/\/$/, '')}/access/${encodeURIComponent(link.token)}`,
+      expiresAt: link.record.expires_at,
+      status: 'active',
+    });
+  });
+
+  fastify.post('/browser-access/link/revoke', {
+    preHandler: async (request, reply) => {
+      const { createVerifyAuth } = await import('../../auth/verifyAuth.js');
+      const verifyAuth = createVerifyAuth({ jwtSecret, cookieName, botToken });
+      return verifyAuth(request, reply);
+    },
+  }, async (request, reply) => {
+    if (!request.user) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    revokeActiveBrowserAccessLinks(`tg_${request.user.tgId}`);
+    return reply.send({ ok: true });
+  });
+
+  fastify.post<{
+    Body: { tgId: number; rotate?: boolean }
+  }>('/browser-access/link/admin', async (request, reply) => {
+    const apiKey = request.headers['x-admin-api-key'];
+    if (!adminApiKey || apiKey !== adminApiKey) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    const tgId = Number(request.body?.tgId);
+    if (!Number.isFinite(tgId) || tgId <= 0) {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        message: 'tgId is required',
+      });
+    }
+
+    const userRef = `tg_${tgId}`;
+    const link = request.body.rotate ? rotateBrowserAccessLink(userRef) : getOrCreateBrowserAccessLink(userRef);
+
+    return reply.send({
+      ok: true,
+      url: `${webAppBaseUrl.replace(/\/$/, '')}/access/${encodeURIComponent(link.token)}`,
+      expiresAt: link.record.expires_at,
+      status: 'active',
+    });
+  });
+
+  fastify.post<{ Body: { token: string } }>('/browser-access/consume', {
+    schema: {
+      body: {
+        type: 'object',
+        required: ['token'],
+        properties: {
+          token: { type: 'string', minLength: 1 },
+        },
+      },
+    },
+  }, async (request, reply) => {
+    const result = consumeBrowserAccessLink(request.body.token);
+
+    if (result.status !== 'active' || !result.userRef) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: result.status,
+      });
+    }
+
+    const tgId = Number(result.userRef.replace(/^tg_/, ''));
+    if (!Number.isFinite(tgId) || tgId <= 0) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'invalid',
+      });
+    }
+
+    const sessionToken = createToken({
+      tgId,
+      secret: jwtSecret,
+      expiresInDays: 30,
+    });
+
+    return reply.send({
+      ok: true,
+      sessionToken,
+      expiresAt: result.expiresAt,
+      tgId,
+    });
+  });
+
+  fastify.post<{
+    Body: { tgId: number; username?: string; firstName?: string }
+  }>('/ios-handoff', async (request, reply) => {
+    const apiKey = request.headers['x-admin-api-key'];
+    if (!adminApiKey || apiKey !== adminApiKey) {
+      return reply.status(401).send({
+        error: 'Unauthorized',
+        message: 'Authentication required',
+      });
+    }
+
+    const tgId = Number(request.body?.tgId);
+    if (!Number.isFinite(tgId) || tgId <= 0) {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        message: 'tgId is required',
+      });
+    }
+
+    const handoff = createIosHandoffToken({
+      tgId,
+      username: request.body.username,
+      firstName: request.body.firstName,
+    });
+
+    return reply.send({
+      ok: true,
+      token: handoff.token,
+      expiresAt: handoff.expiresAt,
+      redirectUrl: `${webAppBaseUrl.replace(/\/$/, '')}/ios-auth-redirect/${encodeURIComponent(handoff.token)}`,
+    });
+  });
+
+  fastify.post('/ios-handoff/telegram', {
+    preHandler: async (request, reply) => {
+      const { createVerifyAuth } = await import('../../auth/verifyAuth.js');
+      const verifyAuth = createVerifyAuth({ jwtSecret, cookieName, botToken });
+      return verifyAuth(request, reply);
+    },
+  }, async (request, reply) => {
+    if (!request.user) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+
+    const handoff = createIosHandoffToken({
+      tgId: request.user.tgId,
+      username: request.user.username,
+      firstName: request.user.firstName,
+    });
+
+    return reply.send({
+      ok: true,
+      token: handoff.token,
+      expiresAt: handoff.expiresAt,
+      redirectUrl: `${webAppBaseUrl.replace(/\/$/, '')}/ios-auth-redirect/${encodeURIComponent(handoff.token)}`,
+    });
+  });
 
   /**
    * GET /v1/auth/me
@@ -213,5 +420,3 @@ export async function authRoutes(fastify: FastifyInstance) {
     }
   );
 }
-
-

@@ -113,5 +113,39 @@ function runMigrations(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_vpn_keys_user_ref ON vpn_keys(user_ref);
     CREATE INDEX IF NOT EXISTS idx_vpn_keys_active ON vpn_keys(user_ref, is_active);
   `);
-}
 
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS browser_access_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_ref TEXT NOT NULL,
+      token_hash TEXT NOT NULL UNIQUE,
+      token_ciphertext TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      last_used_at TEXT,
+      revoked_at TEXT,
+      rotated_from_id INTEGER,
+      FOREIGN KEY (rotated_from_id) REFERENCES browser_access_links(id)
+    )
+  `);
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS ios_handoff_tokens (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tg_id INTEGER NOT NULL,
+      username TEXT,
+      first_name TEXT,
+      token_hash TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      consumed_at TEXT
+    )
+  `);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_browser_access_links_user_ref
+      ON browser_access_links(user_ref, revoked_at, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_ios_handoff_tokens_tg_id
+      ON ios_handoff_tokens(tg_id, consumed_at, expires_at);
+  `);
+}

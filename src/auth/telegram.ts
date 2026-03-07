@@ -56,19 +56,25 @@ export function verifyTelegramInitData(
     const originalParamsMap = new Map<string, string>();
     const decodedParamsMap = new Map<string, string>();
     const pairs = initData.split('&');
-    
+
     let hash: string | null = null;
-    
+
     for (const pair of pairs) {
-      const [key, rawValue = ''] = pair.split('=');
-      const decodedValue = decodeURIComponent(rawValue);
-      
+      const equalIndex = pair.indexOf('=');
+      if (equalIndex === -1) continue;
+
+      const key = pair.substring(0, equalIndex);
+      const rawValue = pair.substring(equalIndex + 1);
+
+      // ВАЖНО: В URL encoding '+' означает пробел. 
+      // decodeURIComponent в Node.js НЕ заменяет плюсы на пробелы автоматически.
+      const decodedValue = decodeURIComponent(rawValue.replace(/\+/g, ' '));
+
       if (key === 'hash') {
         hash = decodedValue;
       } else {
-        // ВАЖНО: Используем ДЕКОДИРОВАННЫЕ значения для data_check_string
-        originalParamsMap.set(key, decodedValue); 
-        decodedParamsMap.set(key, decodedValue); 
+        originalParamsMap.set(key, decodedValue);
+        decodedParamsMap.set(key, decodedValue);
       }
     }
 
@@ -118,7 +124,7 @@ export function verifyTelegramInitData(
 
     const now = Math.floor(Date.now() / 1000);
     const age = now - authDate;
-    
+
     if (age > maxAgeSeconds) {
       return { valid: false, error: `auth_date too old: ${age} seconds (max: ${maxAgeSeconds})` };
     }
